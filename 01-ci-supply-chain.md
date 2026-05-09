@@ -219,19 +219,19 @@ Self-hosted runners on public repos with `pull_request` triggers (the PyTorch 20
 
 ### Change over time
 
-Re-scanned the 456 PyPI critical packages on 28 April with zizmor 1.24.1. The original scan was 6-11 April with 1.23.1. Old results saved in `data/zizmor_results_prev/`.
+Re-scanned the PyPI critical set on 28 April with zizmor 1.24.1 and again on 9 May. The original scan was 6-11 April with 1.23.1. Old results saved in `data/zizmor_results_prev/`.
 
-| audit | 6-11 Apr | 28 Apr | delta |
-|---|---|---|---|
-| unpinned-uses | 15,301 | 12,402 | -19% |
-| artipacked | 6,673 | 5,372 | -19% |
-| excessive-permissions | 3,321 | 2,275 | -31% |
-| template-injection | 883 | 892 | +1% |
-| unpinned-images | 401 | 106 | -74% |
-| bot-conditions | 39 | 11 | -72% |
-| use-trusted-publishing | 111 | 109 | -2 |
+Findings counts below are deduped by repository; packages that share a repo (google-cloud-python ×13, azure-sdk-for-python ×12, opentelemetry ×8, etc.) are counted once. An earlier version of this table counted per package, which roughly doubled the numbers and overstated the deltas; the dedup was added to `load_db.py` on 28 April after that table was generated.
 
-`secrets-outside-env` dropped to zero, but that's a zizmor persona change in 1.24.0, not a real fix. The rest is mostly repos hardening: unpinned-uses, artipacked, and excessive-permissions weren't touched in 1.24.0, so those drops are maintainers pinning and adding `permissions:` blocks in the three weeks after Trivy (19 March) and elementary-data (24 April). apispec, awscli, and babel went to zero findings entirely.
+| audit | 6-11 Apr | 28 Apr | 9 May | Apr→Apr |
+|---|---|---|---|---|
+| unpinned-uses | 7,446 | 6,320 | 6,326 | -15% |
+| artipacked | 2,755 | 2,337 | 2,329 | -15% |
+| excessive-permissions | 2,186 | 1,887 | 1,873 | -14% |
+| template-injection | 708 | 715 | 708 | +1% |
+| use-trusted-publishing | | 93 | 93 | |
+
+`secrets-outside-env` dropped to zero, but that's a zizmor persona change in 1.24.0, not a real fix. The rest is mostly repos hardening: unpinned-uses, artipacked, and excessive-permissions weren't touched in 1.24.0, so the ~15% drops are maintainers pinning and adding `permissions:` blocks in the three weeks after Trivy (19 March) and elementary-data (24 April). apispec, awscli, and babel went to zero findings entirely. 28 April to 9 May is essentially flat.
 
 This conflates the zizmor upgrade with repo changes, so it's not usable for the main aggregate numbers. The talk should stay on the 6-11 April / 1.23.1 snapshot for everything in the funnel and the audit table. But re-running the critical set at intervals could make a good closing slide: "do publicised incidents move the needle." Would need at least one more data point closer to the conference, ideally with the zizmor version held constant (scan.py is now pinned to 1.24.1).
 
