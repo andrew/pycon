@@ -14,30 +14,56 @@ BRIEF_BASE = Path("data/brief")
 NO_WORKFLOWS_FILE = Path("data/no_workflows.json")
 FAILED_FILE = Path("data/failed.json")
 MAX_CLONE_RETRIES = 3
+CLONE_TIMEOUT = 300
+
+GIT_ENV = {
+    **subprocess.os.environ,
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_ASKPASS": "",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "SSH_ASKPASS": "",
+}
+
+TRANSIENT_CLONE_ERRORS = (
+    "rate limit", "too many requests", "429",
+    "early eof", "rpc failed", "could not resolve host",
+    "connection reset", "timed out", "503", "502", "500",
+    "remote end hung up",
+)
+
+
+def remote_head(repo_url: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-c", "credential.helper=", "ls-remote", repo_url, "HEAD"],
+            capture_output=True, text=True, timeout=30, env=GIT_ENV,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if result.returncode != 0 or not result.stdout:
+        return None
+    return result.stdout.split()[0]
 
 
 def clone_with_backoff(repo_url: str, clone_dir: str) -> subprocess.CompletedProcess:
     for attempt in range(MAX_CLONE_RETRIES):
-        env = {
-            **subprocess.os.environ,
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_ASKPASS": "",
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "SSH_ASKPASS": "",
-        }
-        result = subprocess.run(
-            ["git", "-c", "credential.helper=", "clone", "--depth=1", "--filter=blob:none", repo_url, clone_dir],
-            capture_output=True, text=True, timeout=60, env=env,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "-c", "credential.helper=", "clone", "--depth=1", "--filter=blob:none", repo_url, clone_dir],
+                capture_output=True, text=True, timeout=CLONE_TIMEOUT, env=GIT_ENV,
+            )
+        except subprocess.TimeoutExpired:
+            result = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="timed out")
+            shutil.rmtree(clone_dir, ignore_errors=True)
         if result.returncode == 0:
             return result
         stderr = result.stderr.lower()
-        if "rate limit" in stderr or "too many requests" in stderr or "429" in stderr:
-            wait = 2 ** attempt * 30
-            print(f"rate limited, waiting {wait}s...", end=" ", flush=True)
+        if any(e in stderr for e in TRANSIENT_CLONE_ERRORS) and attempt < MAX_CLONE_RETRIES - 1:
+            wait = 2 ** attempt * 10
+            print(f"transient ({stderr.splitlines()[-1] if stderr else 'timeout'}), retry in {wait}s...", end=" ", flush=True)
             time.sleep(wait)
+            shutil.rmtree(clone_dir, ignore_errors=True)
             continue
-        # not a rate limit, don't retry
         return result
     return result
 
@@ -106,19 +132,29 @@ def safe_name(name: str) -> str:
     return name.replace("/", "__")
 
 
-def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, brief_dir: Path, no_workflows: set) -> str:
+def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, brief_dir: Path, no_workflows: set, force: bool) -> str:
     """Returns 'scanned', 'no_workflows', 'failed', or 'skip'."""
     fname = safe_name(name)
     zizmor_path = results_dir / f"{fname}.json"
+    sha_path = results_dir / f"{fname}.sha"
     actions_path = actions_dir / f"{fname}.json"
     brief_path = brief_dir / f"{fname}.json"
     has_zizmor = zizmor_path.exists()
     has_actions = actions_path.exists()
     has_brief = brief_path.exists()
+    have_all = has_zizmor and has_actions and has_brief
 
-    if has_zizmor and has_actions and has_brief:
-        return "skip"
-    if repo_url in no_workflows and has_brief:
+    head = None
+    if have_all:
+        if not force:
+            return "skip"
+        head = remote_head(repo_url)
+        if head and sha_path.exists() and sha_path.read_text().strip() == head:
+            print(f"  {repo_url} unchanged at {head[:8]}")
+            return "skip"
+        for p in (zizmor_path, actions_path, brief_path):
+            p.unlink(missing_ok=True)
+    elif repo_url in no_workflows and has_brief and not force:
         return "skip"
 
     tmpdir = tempfile.mkdtemp()
@@ -127,8 +163,13 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
         print(f"  cloning {repo_url}...", end=" ", flush=True)
         result = clone_with_backoff(repo_url, clone_dir)
         if result.returncode != 0:
-            print(f"clone failed")
+            print(f"clone failed: {result.stderr.strip().splitlines()[-1] if result.stderr else ''}")
             return "failed"
+        if not head:
+            head = subprocess.run(
+                ["git", "-C", clone_dir, "rev-parse", "HEAD"],
+                capture_output=True, text=True,
+            ).stdout.strip()
 
         # run brief before sparse checkout (needs full file tree)
         if not has_brief:
@@ -185,6 +226,8 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
         else:
             print("done")
 
+        if head:
+            sha_path.write_text(head)
         return "scanned"
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -219,6 +262,7 @@ def iter_packages_from_pages(pages_dir: Path):
 def main():
     registry = sys.argv[1] if len(sys.argv) > 1 else "pypi.org"
     critical = "--critical" in sys.argv
+    force = "--force" in sys.argv
     slug = registry.replace(".", "_")
     if critical:
         slug += "_critical"
@@ -253,7 +297,7 @@ def main():
             continue
 
         try:
-            status = scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows)
+            status = scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows, force)
         except Exception as e:
             print(f"  {name} error: {e}")
             failed_set.add(repo_url)
