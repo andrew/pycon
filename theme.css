@@ -11,6 +11,8 @@
   --color-muted: #87867f;
   --color-accent: #d97757;
   --color-accent-dark: #c1623d;
+  --color-green-dark: #1f3a2e;
+  --color-green-darker: #16281f;
   --color-border: #e3dacc;
   --font-serif: "Source Serif 4", "Tiempos Text", Georgia, serif;
   --font-sans: "Inter", "Styrene B", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -186,7 +188,7 @@ section::after {
 }
 
 section.invert {
-  background-color: #181818;
+  background-color: var(--color-green-dark);
   color: #f0eee6;
 }
 
@@ -198,13 +200,13 @@ section.invert strong {
 }
 
 section.invert blockquote {
-  background: #262625;
+  background: var(--color-green-darker);
   border-left-color: var(--color-accent);
   color: #f0eee6;
 }
 
 section.invert code {
-  background: #262625;
-  border-color: #3a3a38;
+  background: var(--color-green-darker);
+  border-color: #2d4a3a;
   color: #f0eee6;
 }
