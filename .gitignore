@@ -1,0 +1,18 @@
+slides.html
+slides.pdf
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+collect/.venv
+
+# Data
+collect/data/*
+!collect/data/report*.md
+!collect/data/comparison.md
