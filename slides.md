@@ -261,6 +261,12 @@ ecosyste.ms dataset and zizmor scanning
 - Every PyPI package with a linked GitHub repo, via ecosyste.ms
 - Dependents + download counts for ranking
 - **150,274** packages with `.github/workflows/`
+- **TODO%** of linked repos 404: package still installable, source gone
+
+<!--
+A chunk of PyPI links to repos that are deleted, renamed, or private.
+You can pip install it, you can't audit it. Separate talk in that.
+-->
 
 ---
 
