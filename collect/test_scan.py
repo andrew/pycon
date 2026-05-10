@@ -37,14 +37,12 @@ class CloneWithBackoffTests(unittest.TestCase):
     @mock.patch("scan.shutil.rmtree")
     @mock.patch("scan.time.sleep")
     @mock.patch("scan.subprocess.run")
-    def test_timeout_is_transient(self, m_run, m_sleep, m_rmtree):
-        m_run.side_effect = [
-            subprocess.TimeoutExpired(cmd=["git"], timeout=300),
-            self._result(0),
-        ]
+    def test_timeout_fails_fast(self, m_run, m_sleep, m_rmtree):
+        m_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=120)
         r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope")
-        self.assertEqual(r.returncode, 0)
-        self.assertEqual(m_run.call_count, 2)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(m_run.call_count, 1)
+        m_sleep.assert_not_called()
 
     @mock.patch("scan.time.sleep")
     @mock.patch("scan.subprocess.run")

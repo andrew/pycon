@@ -38,7 +38,7 @@ uv run report_actions.py            # actions report -> data/report_actions_pypi
 
 All scripts default to `pypi.org` and accept an optional registry argument and `--critical` flag.
 
-`scan.py` writes per-package results to `data/zizmor_results/<registry>/<pkg>.json` with a `<pkg>.sha` sidecar recording the commit scanned. By default it skips any package that already has results, so an interrupted run can be resumed by re-running the same command. Pass `--force` to refresh: each repo's HEAD is checked with `git ls-remote` and only repos with new commits since the recorded SHA are re-cloned and re-scanned. Clones retry up to three times on transient errors (timeouts, early EOF, 5xx, rate limits) with a 300s per-attempt timeout.
+`scan.py` writes per-package results to `data/zizmor_results/<registry>/<pkg>.json` with a `<pkg>.sha` sidecar recording the commit scanned. Pass `--workers N` to clone and scan N repos concurrently. By default it skips any package that already has results, so an interrupted run can be resumed by re-running the same command. Pass `--force` to refresh: each repo's HEAD is checked with `git ls-remote` and only repos with new commits since the recorded SHA are re-cloned and re-scanned. Clones retry up to three times on transient errors (timeouts, early EOF, 5xx, rate limits) with a 300s per-attempt timeout.
 
 For a clean point-in-time snapshot, move `data/zizmor_results/<registry>/` aside before running.
 
