@@ -3,6 +3,7 @@
 ## Slides
 
 - [ ] Actions adoption % across PyPI packages with GitHub repos (chapter 1, pull from actions_pypi_org.db)
+- [ ] % of PyPI-linked repos that 404 (chapter 3, filter failed.json to pypi + not-found/auth errors)
 - [ ] % of packages that publish from Actions (chapter 1)
 - [ ] `images/zizmor-output.png`: terminal screenshot of zizmor on a sample workflow
 - [ ] `images/elementary-zizmor.png`: the actual finding with the line highlighted
