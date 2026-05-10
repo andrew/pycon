@@ -3,7 +3,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import yaml
@@ -14,7 +16,7 @@ BRIEF_BASE = Path("data/brief")
 NO_WORKFLOWS_FILE = Path("data/no_workflows.json")
 FAILED_FILE = Path("data/failed.json")
 MAX_CLONE_RETRIES = 3
-CLONE_TIMEOUT = 300
+CLONE_TIMEOUT = 120
 
 GIT_ENV = {
     **subprocess.os.environ,
@@ -27,7 +29,7 @@ GIT_ENV = {
 TRANSIENT_CLONE_ERRORS = (
     "rate limit", "too many requests", "429",
     "early eof", "rpc failed", "could not resolve host",
-    "connection reset", "timed out", "503", "502", "500",
+    "connection reset", "503", "502", "500",
     "remote end hung up",
 )
 
@@ -49,7 +51,9 @@ def clone_with_backoff(repo_url: str, clone_dir: str) -> subprocess.CompletedPro
     for attempt in range(MAX_CLONE_RETRIES):
         try:
             result = subprocess.run(
-                ["git", "-c", "credential.helper=", "clone", "--depth=1", "--filter=blob:none", repo_url, clone_dir],
+                ["git", "-c", "credential.helper=", "-c", "submodule.recurse=false",
+                 "clone", "--depth=1", "--filter=blob:none", "--no-recurse-submodules",
+                 "--no-tags", repo_url, clone_dir],
                 capture_output=True, text=True, timeout=CLONE_TIMEOUT, env=GIT_ENV,
             )
         except subprocess.TimeoutExpired:
@@ -132,8 +136,14 @@ def safe_name(name: str) -> str:
     return name.replace("/", "__")
 
 
+def worker_tag() -> str:
+    t = threading.current_thread().name
+    return f"w{t.rsplit('_', 1)[-1]}" if "_" in t else "w0"
+
+
 def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, brief_dir: Path, no_workflows: set, force: bool) -> str:
     """Returns 'scanned', 'no_workflows', 'failed', or 'skip'."""
+    tag = worker_tag()
     fname = safe_name(name)
     zizmor_path = results_dir / f"{fname}.json"
     sha_path = results_dir / f"{fname}.sha"
@@ -150,7 +160,7 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
             return "skip"
         head = remote_head(repo_url)
         if head and sha_path.exists() and sha_path.read_text().strip() == head:
-            print(f"  {repo_url} unchanged at {head[:8]}")
+            print(f"  [{tag}] {name} unchanged at {head[:8]}")
             return "skip"
         for p in (zizmor_path, actions_path, brief_path):
             p.unlink(missing_ok=True)
@@ -160,10 +170,11 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
     tmpdir = tempfile.mkdtemp()
     try:
         clone_dir = str(Path(tmpdir) / name)
-        print(f"  cloning {repo_url}...", end=" ", flush=True)
+        print(f"  [{tag}] {name} cloning {repo_url}", flush=True)
         result = clone_with_backoff(repo_url, clone_dir)
         if result.returncode != 0:
-            print(f"clone failed: {result.stderr.strip().splitlines()[-1] if result.stderr else ''}")
+            err = result.stderr.strip().splitlines()[-1] if result.stderr else ""
+            print(f"  [{tag}] {name} clone failed: {err}")
             return "failed"
         if not head:
             head = subprocess.run(
@@ -180,7 +191,6 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
             if result.returncode == 0 and result.stdout.strip():
                 brief_dir.mkdir(parents=True, exist_ok=True)
                 brief_path.write_text(result.stdout)
-                print("brief...", end=" ", flush=True)
 
         subprocess.run(
             ["git", "sparse-checkout", "set", ".github/workflows"],
@@ -189,26 +199,26 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
 
         workflows_dir = Path(clone_dir) / ".github" / "workflows"
         if not workflows_dir.exists() or not any(workflows_dir.iterdir()):
-            print("no workflows")
+            print(f"  [{tag}] {name} no workflows")
             return "no_workflows"
 
         # extract actions
+        n_actions = 0
         if not has_actions:
             actions = extract_actions(workflows_dir)
             actions_dir.mkdir(parents=True, exist_ok=True)
             actions_path.write_text(json.dumps(actions, indent=2))
-            print(f"{len(actions)} actions...", end=" ", flush=True)
+            n_actions = len(actions)
 
         # run zizmor
         if not has_zizmor:
-            print("scanning...", end=" ", flush=True)
             result = subprocess.run(
                 ["uvx", "zizmor@1.24.1", "--format=json", str(workflows_dir)],
                 capture_output=True, text=True, timeout=120,
             )
 
             if "crashed" in result.stderr or "panic" in result.stderr.lower():
-                print(f"zizmor crashed")
+                print(f"  [{tag}] {name} zizmor crashed")
                 return "failed"
 
             output = result.stdout.strip()
@@ -218,13 +228,13 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
             try:
                 findings = json.loads(output)
             except json.JSONDecodeError:
-                print(f"bad json output")
+                print(f"  [{tag}] {name} bad json output")
                 return "failed"
 
             zizmor_path.write_text(json.dumps(findings, indent=2))
-            print(f"{len(findings)} findings")
+            print(f"  [{tag}] {name} {n_actions} actions, {len(findings)} findings")
         else:
-            print("done")
+            print(f"  [{tag}] {name} done")
 
         if head:
             sha_path.write_text(head)
@@ -259,10 +269,19 @@ def iter_packages_from_pages(pages_dir: Path):
             yield name, repo_url, canonical
 
 
+def arg_value(flag, default):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return default
+
+
 def main():
-    registry = sys.argv[1] if len(sys.argv) > 1 else "pypi.org"
+    registry = next((a for a in sys.argv[1:] if not a.startswith("--") and not a.isdigit()), "pypi.org")
     critical = "--critical" in sys.argv
     force = "--force" in sys.argv
+    workers = int(arg_value("--workers", "1"))
     slug = registry.replace(".", "_")
     if critical:
         slug += "_critical"
@@ -280,52 +299,67 @@ def main():
     if FAILED_FILE.exists():
         failed_set = set(json.loads(FAILED_FILE.read_text()))
 
-    skipped = 0
-    copied = 0
-    success = 0
-    no_wf = 0
-    failed = 0
-    for name, repo_url, canonical in iter_packages_from_pages(pages_dir):
-        if name != canonical:
-            # shared repo - copy results from canonical if available
-            canonical_result = results_dir / f"{safe_name(canonical)}.json"
-            pkg_result = results_dir / f"{safe_name(name)}.json"
-            if canonical_result.exists() and not pkg_result.exists():
-                pkg_result.write_text(canonical_result.read_text())
-                copied += 1
-            skipped += 1
-            continue
+    counts = {"scanned": 0, "copied": 0, "no_workflows": 0, "failed": 0, "skip": 0}
+    lock = threading.Lock()
 
+    def save_state():
+        NO_WORKFLOWS_FILE.write_text(json.dumps(sorted(no_workflows), indent=2))
+        FAILED_FILE.write_text(json.dumps(sorted(failed_set), indent=2))
+
+    def record(name, repo_url, status):
+        with lock:
+            counts[status] = counts.get(status, 0) + 1
+            if status == "no_workflows":
+                no_workflows.add(repo_url)
+            elif status == "failed":
+                failed_set.add(repo_url)
+            elif status == "skip":
+                if counts["skip"] % 500 == 0:
+                    print(f"  skipped {counts['skip']}...")
+                return
+            done = counts["scanned"] + counts["no_workflows"] + counts["failed"]
+            if done % 100 == 0:
+                save_state()
+
+    def do_scan(name, repo_url):
         try:
-            status = scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows, force)
+            return scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows, force)
         except Exception as e:
-            print(f"  {name} error: {e}")
-            failed_set.add(repo_url)
-            failed += 1
-            continue
-        if status == "skip":
-            skipped += 1
-            if skipped % 500 == 0:
-                print(f"  skipped {skipped}...")
-            continue
-        print(f"  {name}", end=" ")
-        if status == "scanned":
-            success += 1
-        elif status == "no_workflows":
-            no_workflows.add(repo_url)
-            no_wf += 1
-        else:
-            failed_set.add(repo_url)
-            failed += 1
+            print(f"  [{worker_tag()}] {name} error: {e}")
+            return "failed"
 
-        # save state periodically
-        if (success + no_wf + failed) % 100 == 0:
-            NO_WORKFLOWS_FILE.write_text(json.dumps(sorted(no_workflows), indent=2))
-            FAILED_FILE.write_text(json.dumps(sorted(failed_set), indent=2))
+    duplicates = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = {}
+        for name, repo_url, canonical in iter_packages_from_pages(pages_dir):
+            if name != canonical:
+                duplicates.append((name, canonical))
+                continue
+            if repo_url in failed_set and not force:
+                counts["skip"] += 1
+                continue
+            fut = pool.submit(do_scan, name, repo_url)
+            pending[fut] = (name, repo_url)
+            while len(pending) >= workers * 4:
+                for f in as_completed(list(pending), timeout=None):
+                    n, u = pending.pop(f)
+                    record(n, u, f.result())
+                    break
+        for f in as_completed(pending):
+            n, u = pending.pop(f)
+            record(n, u, f.result())
 
-    NO_WORKFLOWS_FILE.write_text(json.dumps(sorted(no_workflows), indent=2))
-    FAILED_FILE.write_text(json.dumps(sorted(failed_set), indent=2))
-    print(f"\nDone: {success} scanned, {copied} copied, {no_wf} no workflows, {failed} failed, {skipped} skipped")
+    for name, canonical in duplicates:
+        src = results_dir / f"{safe_name(canonical)}.json"
+        dst = results_dir / f"{safe_name(name)}.json"
+        if src.exists() and not dst.exists():
+            dst.write_text(src.read_text())
+            counts["copied"] += 1
+
+    save_state()
+    print(f"\nDone: {counts['scanned']} scanned, {counts['copied']} copied, "
+          f"{counts['no_workflows']} no workflows, {counts['failed']} failed, "
+          f"{counts['skip']} skipped")
 
 
 if __name__ == "__main__":
