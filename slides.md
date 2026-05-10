@@ -285,10 +285,10 @@ _github.com/andrew/pycon_
 
 ---
 
-## What zizmor can and can't see
+## Limits of static YAML analysis
 
-- YAML only
-- Can't see repo settings: default token permissions, branch protection, environment reviewers
+- Workflow files only
+- Repo settings are out of scope: default token permissions, branch protection, environment reviewers
 - A finding means the YAML permits the pattern, not that it's exploitable today
 
 <!--
