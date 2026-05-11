@@ -31,10 +31,12 @@ where the infrastructure is fragile.
 ## nesbitt.io
 
 - [GitHub Actions is a Package Manager](https://nesbitt.io/2025/12/06/github-actions-package-manager.html)
+- [GitHub Actions is the Weakest Link](https://nesbitt.io/2026/04/28/github-actions-is-the-weakest-link.html)
 - [How UV Got So Fast](https://nesbitt.io/2025/12/26/how-uv-got-so-fast.html)
 - [The C-Shaped Hole in Package Management](https://nesbitt.io/2026/01/27/the-c-shaped-hole-in-package-management.html)
 - [Package Managers Need to Cool Down](https://nesbitt.io/2026/03/04/package-managers-need-to-cool-down.html)
 - [If It Quacks Like a Package Manager](https://nesbitt.io/2026/03/08/if-it-quacks-like-a-package-manager.html)
+- [Weekend at Bernie's](https://nesbitt.io/2026/05/08/weekend-at-bernies.html)
 
 <!--
 The first one is the seed of this talk.
@@ -81,8 +83,8 @@ Trusted publishing implications
 
 - Free for public repos
 - Where the code already lives
-- 362,899 PyPI packages link a GitHub repo
-- 150,274 have `.github/workflows/`
+- 386,957 PyPI packages link a GitHub repo
+- 152,318 have `.github/workflows/`
 - Travis, CircleCI, Azure Pipelines: single digits
 
 <!--
@@ -96,7 +98,7 @@ Report as percentages, not counts. report_brief.py for the breakdown.
 ## Publishing from Actions
 
 - Tag → workflow runs → wheel built → `twine upload`
-- 53,747 repos use `pypa/gh-action-pypi-publish`
+- 56,490 repos use `pypa/gh-action-pypi-publish`
 - The runner that builds your wheel has your publish credential
 
 <!--
@@ -261,7 +263,7 @@ ecosyste.ms dataset and zizmor scanning
 
 - Every PyPI package with a linked GitHub repo, via ecosyste.ms
 - Dependents + download counts for ranking
-- **150,274** packages with `.github/workflows/`
+- **152,318** packages with `.github/workflows/`
 - **TODO%** of linked repos 404: package still installable, source gone
 
 <!--
@@ -315,38 +317,19 @@ PyPI repos affected, published CVEs of that class.
 
 | audit | PyPI repos | GHSA advisories |
 |---|---:|---:|
-| `excessive-permissions` | 99,885 | 6 |
-| `unpinned-uses` | 83,751 | 4 |
-| `use-trusted-publishing` | 43,758 | n/a |
-| `template-injection` | 20,626 | **27** |
-| `cache-poisoning` | 14,280 | 2 |
-| `dangerous-triggers` | 6,812 | 8 |
+| `excessive-permissions` | 102,235 | 6 |
+| `unpinned-uses` | 85,774 | 4 |
+| `use-trusted-publishing` | 44,181 | n/a |
+| `template-injection` | 21,166 | **27** |
+| `cache-poisoning` | 15,371 | 2 |
+| `dangerous-triggers` | 7,025 | 8 |
 
-_n = 150,274 · 49 advisories in GHSA ecosystem=actions, overlap allowed_
+_n = 152,318 · 49 advisories in GHSA ecosystem=actions, overlap allowed_
 
 <!--
 27/49 published advisories are injection. The 4 unpinned-uses are
 the four real tag-hijack compromises: Trivy, xygeni, reviewdog,
 tj-actions. bucket_cves.py regenerates this.
--->
-
----
-
-## `unpinned-uses`
-
-```yaml
-- uses: tj-actions/changed-files@v41
-```
-
-- `@v41` is a git tag; the owner (or attacker) can move it
-- Next run executes whatever the tag now points at
-- **83,751** repos use a third-party action by tag
-- 4 published compromises: tj-actions, reviewdog, Trivy, xygeni
-
-<!--
-91% of repos that use any third-party action.
-Trivy: 75/76 tags force-pushed. 403 PyPI packages still on it by tag.
-Fix: pin to 40-char SHA.
 -->
 
 ---
@@ -363,11 +346,30 @@ jobs:
 - Without `permissions:`, the job inherits the repo default
 - For repos created before Feb 2023 that's `contents: write`, `actions: write`, …
 - Any compromised step can push commits and dispatch workflows
-- **99,885** repos
+- **102,235** repos
 
 <!--
 This is the pivot, not the entry. Combine with any of the others
 and the attacker owns the repo. Fix: permissions: {} at top of file.
+-->
+
+---
+
+## `unpinned-uses`
+
+```yaml
+- uses: tj-actions/changed-files@v41
+```
+
+- `@v41` is a git tag; the owner (or attacker) can move it
+- Next run executes whatever the tag now points at
+- **85,774** repos use a third-party action by tag
+- 4 published compromises: tj-actions, reviewdog, Trivy, xygeni
+
+<!--
+91% of repos that use any third-party action.
+Trivy: 75/76 tags force-pushed. 403 PyPI packages still on it by tag.
+Fix: pin to 40-char SHA.
 -->
 
 ---
@@ -380,7 +382,7 @@ and the attacker owns the repo. Fix: permissions: {} at top of file.
 
 - `${{ }}` expands before bash sees the script
 - Attacker-controlled fields (PR title, branch name, issue body) become shell
-- **20,626** repos · **27** of 49 published Actions advisories
+- **21,166** repos · **27** of 49 published Actions advisories
 
 <!--
 elementary-data (Apr 2026): comment.body on issue_comment trigger,
@@ -388,6 +390,45 @@ malicious wheel on PyPI in 10 min. We had it in the dataset.
 1,396 repos interpolate something attacker-controlled; 99 on
 issue/issue_comment triggers where secrets are always in scope.
 Fix: pass through env:, reference $VAR.
+-->
+
+---
+
+## `use-trusted-publishing`
+
+```yaml
+- run: twine upload dist/*
+  env:
+    TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+```
+
+- Long-lived token stored as a repo secret
+- The credential that makes any of the other audits worth exploiting
+- **44,181** repos, including six (896M/mo), fsspec (616M), sqlalchemy (335M)
+
+<!--
+Fix: OIDC trusted publishing with an environment.
+This is the bridge into chapter 5 and hardening.
+-->
+
+---
+
+## `cache-poisoning`
+
+```yaml
+- uses: actions/cache@v4      # in a release job
+  with:
+    key: pip-${{ hashFiles('requirements.txt') }}
+```
+
+- Cache is shared across workflows in a repo
+- A low-privilege job writes a poisoned entry; the release job restores it
+- **15,371** repos · 2 advisories
+
+<!--
+Ultralytics (Dec 2024): fork PR poisoned cache, release workflow
+restored it, crypto miner shipped to PyPI.
+Fix: don't restore caches in jobs that publish.
 -->
 
 ---
@@ -407,7 +448,7 @@ jobs:
 
 - `pull_request_target` runs in the base repo with secrets
 - Checking out the PR head runs the fork's code with those secrets
-- **6,812** repos · 8 advisories
+- **7,025** repos · 8 advisories
 
 <!--
 spotbugs (Nov 2024) -> stolen PAT -> reviewdog -> tj-actions chain.
@@ -417,103 +458,53 @@ Fix: use pull_request, or never check out PR head under _target.
 
 ---
 
-## `cache-poisoning`
-
-```yaml
-- uses: actions/cache@v4      # in a release job
-  with:
-    key: pip-${{ hashFiles('requirements.txt') }}
-```
-
-- Cache is shared across workflows in a repo
-- A low-privilege job writes a poisoned entry; the release job restores it
-- **14,280** repos · 2 advisories
-
-<!--
-Ultralytics (Dec 2024): fork PR poisoned cache, release workflow
-restored it, crypto miner shipped to PyPI.
-Fix: don't restore caches in jobs that publish.
--->
-
----
-
-## `use-trusted-publishing`
-
-```yaml
-- run: twine upload dist/*
-  env:
-    TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-```
-
-- Long-lived token stored as a repo secret
-- Any of the above gives the attacker something worth taking
-- **43,758** repos, including six (896M/mo), fsspec (616M), sqlalchemy (335M)
-
-<!--
-Fix: OIDC trusted publishing with an environment.
-This is the bridge into chapter 5 and hardening.
--->
-
----
-
 ## Most popular third-party actions
 
 | action | PyPI repos | unpinned |
 |---|---:|---:|
-| `pypa/gh-action-pypi-publish` | 53,747 | 84.3% |
-| `codecov/codecov-action` | 20,182 | 92.7% |
-| `astral-sh/setup-uv` | 15,468 | 87.8% |
-| `softprops/action-gh-release` | 8,725 | 91.9% |
-| `docker/login-action` | 4,751 | 85.5% |
-| `pre-commit/action` | 3,561 | 88.2% |
-| `pypa/cibuildwheel` | 2,569 | 93.3% |
-| `snok/install-poetry` | 2,503 | 97.3% |
+| `pypa/gh-action-pypi-publish` | 56,490 | 84.0% |
+| `codecov/codecov-action` | 20,651 | 91.8% |
+| `astral-sh/setup-uv` | 17,047 | 85.6% |
+| `softprops/action-gh-release` | 9,327 | 91.3% |
+| `docker/login-action` | 5,016 | 81.3% |
+| `pre-commit/action` | 3,562 | 87.5% |
+| `pypa/cibuildwheel` | 2,650 | 91.7% |
+| `actions/create-release` _(archived 2021)_ | 1,956 | 98.7% |
+
+`archived-uses`: **3,625** repos depend on an archived action.
 
 <!--
 These are the dependencies of the Python ecosystem's CI.
+actions/create-release is the Bernie: GitHub archived it five years
+ago, ~2k PyPI repos still on it. upload-release-asset same story, 619.
+Status data in data/top_action_repos_status.tsv.
 -->
 
 ---
 
-## Auditing the actions themselves
-
-| action | zizmor findings | notable |
-|---|---:|---|
-| `codecov/codecov-action` | TODO | |
-| `astral-sh/setup-uv` | TODO | |
-| `softprops/action-gh-release` | TODO | |
-| `pypa/cibuildwheel` | TODO | |
-
-zizmor on each action repo's own `.github/workflows/`.
-
-<!--
-Run zizmor on each top-20 action's own .github/workflows/.
-An excessive-permissions or template-injection in setup-uv's
-release workflow is upstream of 3,454 PyPI publish jobs.
--->
-
----
-
-## Transitive dependencies of popular actions
+## Auditing pypa/cibuildwheel
 
 ```yaml
-# aio-libs/create-release/action.yml
+# action.yml — the visible tier
 runs:
   using: composite
   steps:
-    - uses: aio-libs/get-releasenote@v1.4.5
-    - uses: pypa/gh-action-pypi-publish@v1.5.0
-    - uses: ncipollo/release-action@v1
+    - run: python -m cibuildwheel ${{ inputs.package-dir }}
 ```
 
-- The popular composites mostly pin, or only pull `actions/*`
-- The long tail has unpinned third-party `uses:` you can't see from your workflow
+- 2,650 PyPI publish workflows depend on it
+- Self-audits with zizmor (issue #2770), one Low chmod finding
+- At runtime it fetches CPython, PyPy, GraalPy, virtualenv, Node.js, nuget, python-build-standalone from **7 upstream hosts**, HTTPS-only, no hash pin
+- The lockfile in GitHub's 2026 roadmap only covers `uses:`; this tier stays invisible
 
 <!--
-Top composites checked: gh-action-pypi-publish, codecov-action,
-cibuildwheel, pre-commit, snok/install-poetry. All pin or only
-use actions/*. aio-libs/create-release is the counterexample.
-TODO: extend resolve_actions.py over more of the long tail.
+scrutineer scan of cibuildwheel: chmod path traversal in extract_zip,
+precondition-subsumed (the zip already gives RCE).
+Other popular composites checked (gh-action-pypi-publish, codecov-action,
+pre-commit, snok/install-poetry) pin or only use actions/*.
+aio-libs/create-release is the counterexample, pulls aio-libs/get-releasenote@v1.4.5,
+pypa/gh-action-pypi-publish@v1.5.0, ncipollo/release-action@v1.
+TODO: run scrutineer on the rest of top_action_repos.txt.
 -->
 
 ---
@@ -522,17 +513,19 @@ TODO: extend resolve_actions.py over more of the long tail.
 
 | action | repos | unpinned |
 |---|---:|---:|
-| `astral-sh/setup-uv` | 3,454 | 91.9% |
-| `softprops/action-gh-release` | 2,306 | 93.4% |
-| `python-semantic-release/python-semantic-release` | 437 | 90.1% |
-| `snok/install-poetry` | 377 | 96.8% |
-| `ncipollo/release-action` | 336 | 96.2% |
-| `salsify/action-detect-and-tag-new-version` | 260 | 100% |
+| `astral-sh/setup-uv` | 3,819 | 90.5% |
+| `softprops/action-gh-release` | 2,448 | 93.7% |
+| `python-semantic-release/python-semantic-release` | 451 | 87.0% |
+| `snok/install-poetry` | 381 | 95.9% |
+| `ncipollo/release-action` | 337 | 93.1% |
+| `salsify/action-detect-and-tag-new-version` | 265 | 99.6% |
 
 One tag-hijack here runs with PyPI credentials across thousands of packages.
 
 <!--
-Same job as pypa/gh-action-pypi-publish.
+Same job as pypa/gh-action-pypi-publish. 64,324 publish jobs total.
+Worth a callout: step-security/harden-runner is in 144 publish jobs
+at 2.4% unpinned. Security-conscious users actually pin.
 -->
 
 ---
@@ -678,11 +671,11 @@ Point at one of their workflow files on screen.
 
 ## Critical-set findings over time
 
-| audit | 6-11 Apr | 28 Apr | 9 May |
+| audit | 6-11 Apr | 28 Apr | 11 May |
 |---|---:|---:|---:|
-| unpinned-uses | 7,446 | 6,320 | 6,326 |
-| artipacked | 2,755 | 2,337 | 2,329 |
-| excessive-permissions | 2,186 | 1,887 | 1,873 |
+| unpinned-uses | 7,446 | 6,320 | 6,406 |
+| artipacked | 2,755 | 2,337 | 2,376 |
+| excessive-permissions | 2,186 | 1,887 | 1,900 |
 
 PyPI critical set: ~15% drop in three weeks after Trivy and elementary-data, then flat.
 
