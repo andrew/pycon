@@ -39,6 +39,10 @@
 - [ ] Add intercom-client OIDC bypass to trusted-publishing caveats: `id-token: write` on tag push, no environment, attacker pushed tag and deleted the run
 - [ ] Propose a zizmor audit upstream for `id-token: write` without `environment:` (mention to William)
 
+## Brief-derived stats
+
+The May full scan runs `--no-brief`. Brief data exists for ~69k repos in `data/brief/pypi_org/` from earlier runs; `report_brief.py` reads from there. Report brief-derived stats as percentages, not counts, since it's a ~46% sample. If a full-coverage brief pass is needed later, run `scan.py pypi.org --force` without `--no-brief` once disk allows.
+
 ## Refresh after the full re-scan completes
 
 Re-run `uv run slide_data.py` from `collect/` and update:
