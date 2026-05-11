@@ -17,6 +17,7 @@ NO_WORKFLOWS_FILE = Path("data/no_workflows.json")
 FAILED_FILE = Path("data/failed.json")
 MAX_CLONE_RETRIES = 3
 CLONE_TIMEOUT = 120
+MAX_CLONE_MB = 500
 
 GIT_ENV = {
     **subprocess.os.environ,
@@ -47,14 +48,28 @@ def remote_head(repo_url: str) -> str | None:
     return result.stdout.split()[0]
 
 
-def clone_with_backoff(repo_url: str, clone_dir: str) -> subprocess.CompletedProcess:
+def dir_size_mb(path: str) -> int:
+    total = 0
+    for p in Path(path).rglob("*"):
+        if p.is_file():
+            try:
+                total += p.stat().st_size
+            except OSError:
+                pass
+    return total // (1024 * 1024)
+
+
+def clone_with_backoff(repo_url: str, clone_dir: str, sparse: bool) -> subprocess.CompletedProcess:
+    cmd = ["git", "-c", "credential.helper=", "-c", "submodule.recurse=false",
+           "clone", "--depth=1", "--filter=blob:none", "--no-recurse-submodules",
+           "--no-tags"]
+    if sparse:
+        cmd.append("--sparse")
+    cmd += [repo_url, clone_dir]
     for attempt in range(MAX_CLONE_RETRIES):
         try:
             result = subprocess.run(
-                ["git", "-c", "credential.helper=", "-c", "submodule.recurse=false",
-                 "clone", "--depth=1", "--filter=blob:none", "--no-recurse-submodules",
-                 "--no-tags", repo_url, clone_dir],
-                capture_output=True, text=True, timeout=CLONE_TIMEOUT, env=GIT_ENV,
+                cmd, capture_output=True, text=True, timeout=CLONE_TIMEOUT, env=GIT_ENV,
             )
         except subprocess.TimeoutExpired:
             result = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="timed out")
@@ -141,7 +156,7 @@ def worker_tag() -> str:
     return f"w{t.rsplit('_', 1)[-1]}" if "_" in t else "w0"
 
 
-def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, brief_dir: Path, no_workflows: set, force: bool) -> str:
+def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, brief_dir: Path, no_workflows: set, force: bool, run_brief: bool) -> str:
     """Returns 'scanned', 'no_workflows', 'failed', or 'skip'."""
     tag = worker_tag()
     fname = safe_name(name)
@@ -151,7 +166,7 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
     brief_path = brief_dir / f"{fname}.json"
     has_zizmor = zizmor_path.exists()
     has_actions = actions_path.exists()
-    has_brief = brief_path.exists()
+    has_brief = brief_path.exists() or not run_brief
     have_all = has_zizmor and has_actions and has_brief
 
     head = None
@@ -171,10 +186,14 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
     try:
         clone_dir = str(Path(tmpdir) / name)
         print(f"  [{tag}] {name} cloning {repo_url}", flush=True)
-        result = clone_with_backoff(repo_url, clone_dir)
+        result = clone_with_backoff(repo_url, clone_dir, sparse=not run_brief)
         if result.returncode != 0:
             err = result.stderr.strip().splitlines()[-1] if result.stderr else ""
             print(f"  [{tag}] {name} clone failed: {err}")
+            return "failed"
+        size = dir_size_mb(clone_dir)
+        if size > MAX_CLONE_MB:
+            print(f"  [{tag}] {name} too large ({size} MB), skipping")
             return "failed"
         if not head:
             head = subprocess.run(
@@ -183,7 +202,7 @@ def scan_repo(name: str, repo_url: str, results_dir: Path, actions_dir: Path, br
             ).stdout.strip()
 
         # run brief before sparse checkout (needs full file tree)
-        if not has_brief:
+        if run_brief and not brief_path.exists():
             result = subprocess.run(
                 ["brief", "-json", clone_dir],
                 capture_output=True, text=True, timeout=120,
@@ -281,6 +300,7 @@ def main():
     registry = next((a for a in sys.argv[1:] if not a.startswith("--") and not a.isdigit()), "pypi.org")
     critical = "--critical" in sys.argv
     force = "--force" in sys.argv
+    run_brief = "--no-brief" not in sys.argv
     workers = int(arg_value("--workers", "1"))
     slug = registry.replace(".", "_")
     if critical:
@@ -323,7 +343,7 @@ def main():
 
     def do_scan(name, repo_url):
         try:
-            return scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows, force)
+            return scan_repo(name, repo_url, results_dir, actions_dir, brief_dir, no_workflows, force, run_brief)
         except Exception as e:
             print(f"  [{worker_tag()}] {name} error: {e}")
             return "failed"

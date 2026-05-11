@@ -20,7 +20,7 @@ class CloneWithBackoffTests(unittest.TestCase):
             self._result(128, "error: RPC failed; curl 56"),
             self._result(0),
         ]
-        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope")
+        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope", sparse=False)
         self.assertEqual(r.returncode, 0)
         self.assertEqual(m_run.call_count, 3)
         self.assertEqual(m_sleep.call_count, 2)
@@ -29,7 +29,7 @@ class CloneWithBackoffTests(unittest.TestCase):
     @mock.patch("scan.subprocess.run")
     def test_no_retry_on_permanent_error(self, m_run, m_sleep):
         m_run.return_value = self._result(128, "fatal: repository not found")
-        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope")
+        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope", sparse=False)
         self.assertEqual(r.returncode, 128)
         self.assertEqual(m_run.call_count, 1)
         m_sleep.assert_not_called()
@@ -39,7 +39,7 @@ class CloneWithBackoffTests(unittest.TestCase):
     @mock.patch("scan.subprocess.run")
     def test_timeout_fails_fast(self, m_run, m_sleep, m_rmtree):
         m_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=120)
-        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope")
+        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope", sparse=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(m_run.call_count, 1)
         m_sleep.assert_not_called()
@@ -48,7 +48,7 @@ class CloneWithBackoffTests(unittest.TestCase):
     @mock.patch("scan.subprocess.run")
     def test_gives_up_after_max_retries(self, m_run, m_sleep):
         m_run.return_value = self._result(128, "fatal: early EOF")
-        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope")
+        r = scan.clone_with_backoff("https://github.com/x/y", "/tmp/nope", sparse=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(m_run.call_count, scan.MAX_CLONE_RETRIES)
 
@@ -97,7 +97,7 @@ class ScanRepoSkipTests(unittest.TestCase):
     def test_skip_when_have_all_no_force(self):
         self._seed("pkg")
         status = scan.scan_repo("pkg", "https://github.com/x/y",
-                                self.results, self.actions, self.brief, set(), force=False)
+                                self.results, self.actions, self.brief, set(), force=False, run_brief=True)
         self.assertEqual(status, "skip")
 
     @mock.patch("scan.remote_head")
@@ -105,7 +105,7 @@ class ScanRepoSkipTests(unittest.TestCase):
         m_head.return_value = "abc123"
         self._seed("pkg", sha="abc123")
         status = scan.scan_repo("pkg", "https://github.com/x/y",
-                                self.results, self.actions, self.brief, set(), force=True)
+                                self.results, self.actions, self.brief, set(), force=True, run_brief=True)
         self.assertEqual(status, "skip")
 
     @mock.patch("scan.clone_with_backoff")
@@ -115,7 +115,7 @@ class ScanRepoSkipTests(unittest.TestCase):
         m_clone.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="x")
         self._seed("pkg", sha="oldsha")
         status = scan.scan_repo("pkg", "https://github.com/x/y",
-                                self.results, self.actions, self.brief, set(), force=True)
+                                self.results, self.actions, self.brief, set(), force=True, run_brief=True)
         m_clone.assert_called_once()
         self.assertFalse((self.results / "pkg.json").exists())
 
@@ -126,7 +126,7 @@ class ScanRepoSkipTests(unittest.TestCase):
         m_clone.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="x")
         self._seed("pkg", sha=None)
         scan.scan_repo("pkg", "https://github.com/x/y",
-                       self.results, self.actions, self.brief, set(), force=True)
+                       self.results, self.actions, self.brief, set(), force=True, run_brief=True)
         m_clone.assert_called_once()
 
     @mock.patch("scan.clone_with_backoff")
@@ -136,7 +136,7 @@ class ScanRepoSkipTests(unittest.TestCase):
         m_clone.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="x")
         self._seed("pkg", sha="abc123")
         scan.scan_repo("pkg", "https://github.com/x/y",
-                       self.results, self.actions, self.brief, set(), force=True)
+                       self.results, self.actions, self.brief, set(), force=True, run_brief=True)
         m_clone.assert_called_once()
 
 
@@ -153,12 +153,13 @@ class ScanRepoShaWriteTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.base, ignore_errors=True)
 
+    @mock.patch("scan.dir_size_mb", return_value=10)
     @mock.patch("scan.subprocess.run")
     @mock.patch("scan.clone_with_backoff")
     @mock.patch("scan.remote_head")
-    def test_sha_written_on_success(self, m_head, m_clone, m_run):
+    def test_sha_written_on_success(self, m_head, m_clone, m_run, m_size):
         m_head.return_value = None
-        def fake_clone(url, dest):
+        def fake_clone(url, dest, sparse):
             wf = Path(dest) / ".github" / "workflows"
             wf.mkdir(parents=True)
             (wf / "ci.yml").write_text("on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: []\n")
@@ -178,10 +179,45 @@ class ScanRepoShaWriteTests(unittest.TestCase):
         m_run.side_effect = fake_run
 
         status = scan.scan_repo("pkg", "https://github.com/x/y",
-                                self.results, self.actions, self.brief, set(), force=False)
+                                self.results, self.actions, self.brief, set(), force=False, run_brief=True)
         self.assertEqual(status, "scanned")
         self.assertEqual((self.results / "pkg.sha").read_text(), "deadbeef")
         self.assertEqual(json.loads((self.results / "pkg.json").read_text()), [])
+
+    @mock.patch("scan.dir_size_mb", return_value=900)
+    @mock.patch("scan.clone_with_backoff")
+    @mock.patch("scan.remote_head", return_value=None)
+    def test_bails_on_oversize_clone(self, m_head, m_clone, m_size):
+        def fake_clone(url, dest, sparse):
+            Path(dest).mkdir(parents=True)
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        m_clone.side_effect = fake_clone
+        status = scan.scan_repo("pkg", "https://github.com/x/y",
+                                self.results, self.actions, self.brief, set(), force=False, run_brief=True)
+        self.assertEqual(status, "failed")
+        self.assertFalse((self.results / "pkg.json").exists())
+
+    @mock.patch("scan.dir_size_mb", return_value=10)
+    @mock.patch("scan.subprocess.run")
+    @mock.patch("scan.clone_with_backoff")
+    @mock.patch("scan.remote_head", return_value=None)
+    def test_no_brief_uses_sparse_and_skips_brief(self, m_head, m_clone, m_run, m_size):
+        seen_sparse = {}
+        def fake_clone(url, dest, sparse):
+            seen_sparse["v"] = sparse
+            wf = Path(dest) / ".github" / "workflows"
+            wf.mkdir(parents=True)
+            (wf / "ci.yml").write_text("on: push\njobs: {}\n")
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        m_clone.side_effect = fake_clone
+        m_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="[]", stderr="")
+        status = scan.scan_repo("pkg", "https://github.com/x/y",
+                                self.results, self.actions, self.brief, set(), force=False, run_brief=False)
+        self.assertEqual(status, "scanned")
+        self.assertTrue(seen_sparse["v"])
+        self.assertFalse((self.brief / "pkg.json").exists())
+        for call in m_run.call_args_list:
+            self.assertNotIn("brief", call.args[0][0])
 
 
 if __name__ == "__main__":

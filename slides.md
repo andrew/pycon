@@ -86,8 +86,9 @@ Trusted publishing implications
 - Travis, CircleCI, Azure Pipelines: single digits
 
 <!--
-Pull adoption % from actions_pypi_org.db.
-Compare to Travis/CircleCI/Azure from brief data if available.
+CI-system comparison is from brief data over a ~69k sample
+(data/brief/pypi_org/, collected before --no-brief).
+Report as percentages, not counts. report_brief.py for the breakdown.
 -->
 
 ---
