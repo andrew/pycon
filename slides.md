@@ -85,7 +85,7 @@ Trusted publishing implications
 - Where the code already lives
 - 386,957 PyPI packages link a GitHub repo
 - 152,318 have `.github/workflows/`
-- Travis, CircleCI, Azure Pipelines: single digits
+- Travis, CircleCI, Azure Pipelines: single-digit %
 
 <!--
 CI-system comparison is from brief data over a ~69k sample
@@ -99,6 +99,7 @@ Report as percentages, not counts. report_brief.py for the breakdown.
 
 - Tag → workflow runs → wheel built → `twine upload`
 - 56,490 repos use `pypa/gh-action-pypi-publish`
+- ~22% via OIDC, 44,181 still on a stored `PYPI_API_TOKEN`
 - The runner that builds your wheel has your publish credential
 
 <!--
@@ -178,7 +179,7 @@ nesbitt.io/2025/12/06/github-actions-package-manager.html
 ```
 
 - Pulls someone else's code and executes it on your runner
-- That's `pip install`
+- Functionally, that's `pip install`
 - Except `@v41` is a git ref, not an immutable version
 
 ---
@@ -229,7 +230,7 @@ Trivy: 75 of 76 tags force-pushed in one go.
 
 ---
 
-## Five compromises in eighteen months
+## Six compromises in eighteen months
 
 | | | |
 |---|---|---|
@@ -238,11 +239,40 @@ Trivy: 75 of 76 tags force-pushed in one go.
 | tj-actions / reviewdog | Mar 2025 | tags force-pushed, 23k repos |
 | Trivy ×2 | Mar 2026 | 75/76 tags force-pushed |
 | elementary-data | Apr 2026 | template injection → **PyPI** |
+| `@tanstack/*` | 11 May 2026 | cache poison + OIDC theft → **npm** |
 
 <!--
-Two of those put malicious wheels on PyPI.
-This is the bridge into "so I went and looked".
+Three put malicious wheels on PyPI or npm.
+TanStack happened yesterday: bundle-size.yml pull_request_target
+poisoned the pnpm cache, publish workflow restored it,
+attacker code extracted id-token from runner memory and uploaded
+42 packages / 84 versions. OIDC trusted publishing didn't help
+because the attacker was already inside the workflow that had it.
 -->
+
+---
+
+## TanStack, 11 May 2026
+
+```
+fork PR → bundle-size.yml runs fork code (pull_request_target)
+       → fork code poisons pnpm store cache
+publish workflow → restores poisoned cache
+                → cached code dumps runner memory
+                → extracts OIDC token, uploads 42 packages to npm
+```
+
+- Three audits chained: `dangerous-triggers`, `cache-poisoning`, and a runtime token extraction
+- Trusted publishing didn't help: the attacker was inside the workflow that had `id-token: write`
+- **1,348 PyPI repos** have the same `dangerous-triggers` + `cache-poisoning` shape
+
+<!--
+Yesterday's news as the audience walks in. The chain isn't npm-specific;
+swap pnpm cache for pip/wheel cache and PyPI for npm and it's
+identical. Argues for ALL the hardening rules, not just OIDC.
+tanstack.com/blog/npm-supply-chain-compromise-postmortem
+-->
+
 
 ---
 
@@ -264,7 +294,7 @@ ecosyste.ms dataset and zizmor scanning
 - Every PyPI package with a linked GitHub repo, via ecosyste.ms
 - Dependents + download counts for ranking
 - **152,318** packages with `.github/workflows/`
-- **TODO%** of linked repos 404: package still installable, source gone
+- ~20% of linked repos fail to clone: package still installable, source gone
 
 <!--
 A chunk of PyPI links to repos that are deleted, renamed, or private.
@@ -283,7 +313,7 @@ You can pip install it, you can't audit it. Separate talk in that.
 _github.com/andrew/pycon_
 
 <!--
-6-11 April 2026, zizmor 1.23.1. Resumable.
+9-11 May 2026, zizmor 1.24.1. Resumable.
 -->
 
 ---
@@ -389,6 +419,8 @@ elementary-data (Apr 2026): comment.body on issue_comment trigger,
 malicious wheel on PyPI in 10 min. We had it in the dataset.
 1,396 repos interpolate something attacker-controlled; 99 on
 issue/issue_comment triggers where secrets are always in scope.
+Biggest in the chain-of-10: sqlglot, 11.6M/month, disclosed.
+Other 9 still going through coordinated disclosure, unnamed on stage.
 Fix: pass through env:, reference $VAR.
 -->
 
@@ -404,7 +436,8 @@ Fix: pass through env:, reference $VAR.
 
 - Long-lived token stored as a repo secret
 - The credential that makes any of the other audits worth exploiting
-- **44,181** repos, including six (896M/mo), fsspec (616M), sqlalchemy (335M)
+- **44,181** repos still on tokens (~78% of `gh-action-pypi-publish` users)
+- Including `six` (896M/mo), `fsspec` (616M), `sqlalchemy` (335M)
 
 <!--
 Fix: OIDC trusted publishing with an environment.
@@ -428,6 +461,8 @@ This is the bridge into chapter 5 and hardening.
 <!--
 Ultralytics (Dec 2024): fork PR poisoned cache, release workflow
 restored it, crypto miner shipped to PyPI.
+TanStack (11 May 2026): pnpm store cache poisoned across PR boundary,
+publish workflow restored it, cached code extracted OIDC from runner memory.
 Fix: don't restore caches in jobs that publish.
 -->
 
@@ -451,8 +486,11 @@ jobs:
 - **7,025** repos · 8 advisories
 
 <!--
-spotbugs (Nov 2024) -> stolen PAT -> reviewdog -> tj-actions chain.
+spotbugs (Nov 2024) stole the maintainer's PAT.
+PAT sat unused for four months, used in March 2025 to push
+the reviewdog and tj-actions tag-hijack chain.
 Ultralytics (Dec 2024) entry point.
+TanStack (11 May 2026): bundle-size.yml pull_request_target ran fork code.
 Fix: use pull_request, or never check out PR head under _target.
 -->
 
@@ -466,8 +504,6 @@ Fix: use pull_request, or never check out PR head under _target.
 | `codecov/codecov-action` | 20,651 | 91.8% |
 | `astral-sh/setup-uv` | 17,047 | 85.6% |
 | `softprops/action-gh-release` | 9,327 | 91.3% |
-| `docker/login-action` | 5,016 | 81.3% |
-| `pre-commit/action` | 3,562 | 87.5% |
 | `pypa/cibuildwheel` | 2,650 | 91.7% |
 | `actions/create-release` _(archived 2021)_ | 1,956 | 98.7% |
 
@@ -484,8 +520,10 @@ Status data in data/top_action_repos_status.tsv.
 
 ## Auditing pypa/cibuildwheel
 
+zizmor's audits stop at the workflow YAML; what an action does at runtime is a separate problem.
+
 ```yaml
-# action.yml — the visible tier
+# action.yml (the visible tier)
 runs:
   using: composite
   steps:
@@ -494,8 +532,8 @@ runs:
 
 - 2,650 PyPI publish workflows depend on it
 - Self-audits with zizmor (issue #2770), one Low chmod finding
-- At runtime it fetches CPython, PyPy, GraalPy, virtualenv, Node.js, nuget, python-build-standalone from **7 upstream hosts**, HTTPS-only, no hash pin
-- The lockfile in GitHub's 2026 roadmap only covers `uses:`; this tier stays invisible
+- Fetches CPython, PyPy, GraalPy, virtualenv, Node.js, nuget, python-build-standalone from **7 upstream hosts** at runtime, no hash pin
+- The 2026 roadmap lockfile covers `uses:` and stops there; this tier stays invisible
 
 <!--
 scrutineer scan of cibuildwheel: chmod path traversal in extract_zip,
@@ -517,7 +555,6 @@ TODO: run scrutineer on the rest of top_action_repos.txt.
 | `softprops/action-gh-release` | 2,448 | 93.7% |
 | `python-semantic-release/python-semantic-release` | 451 | 87.0% |
 | `snok/install-poetry` | 381 | 95.9% |
-| `ncipollo/release-action` | 337 | 93.1% |
 | `salsify/action-detect-and-tag-new-version` | 265 | 99.6% |
 
 One tag-hijack here runs with PyPI credentials across thousands of packages.
@@ -525,7 +562,9 @@ One tag-hijack here runs with PyPI credentials across thousands of packages.
 <!--
 Same job as pypa/gh-action-pypi-publish. 64,324 publish jobs total.
 Worth a callout: step-security/harden-runner is in 144 publish jobs
-at 2.4% unpinned. Security-conscious users actually pin.
+at 2.4% unpinned, an order of magnitude better than everything else.
+The audience that would benefit most from pinning is precisely the
+one not running the kind of tool that would tell them so.
 -->
 
 ---
@@ -576,6 +615,8 @@ pip install --require-hashes -r requirements.txt
 - Policy controls on triggers (ban `pull_request_target`)
 - Scoped secrets
 - Egress firewall for runners
+
+_Direction, not yet delivery. No committed ship dates as of writing._
 
 <!--
 The lockfile feature is pip circa 2013.
@@ -630,6 +671,11 @@ jobs:
 
 <!--
 intercom-client showed id-token:write without environment is bypassable.
+TanStack (11 May 2026) showed that even WITH the environment, an attacker
+who gets code into the publish workflow (via cache poisoning here) can
+mint the OIDC token from runner memory. The environment closes the
+dispatch pivot, not runtime extraction. Rule 5 (minimal publish job)
+is what closes that.
 -->
 
 ---

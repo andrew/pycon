@@ -7,7 +7,7 @@
 - [x] Top third-party actions table (Findings)
 - [x] Publish-job concentration table with unpinned % (Findings)
 - [x] Transitive deps: top composites are clean, `aio-libs/create-release` is the counterexample (Findings)
-- [ ] % of PyPI-linked repos that 404 (chapter 3, filter failed.json to pypi + not-found/auth errors)
+- [x] % of PyPI-linked repos that fail to clone: ~20% (68,291 of 343,292 distinct GH URLs in failed.json). Upper bound, includes auth/timeout not just 404.
 - [x] CVE counts per audit: 49 GHSA actions advisories, 27 template-injection / 8 dangerous-triggers / 4 unpinned-uses / 2 cache-poisoning (`bucket_cves.py`)
 - [ ] zizmor findings on top-20 action repos' own workflows (Findings: auditing the actions)
 - [ ] `images/zizmor-output.png`: terminal screenshot of zizmor on a sample workflow
