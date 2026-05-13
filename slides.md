@@ -225,8 +225,14 @@ Trivy: 75 of 76 tags force-pushed in one go.
 - uses: other/helper@main          # not pinned, you never see it
 ```
 
-- No resolver, no tree, no `pip freeze`
+- No resolver, no tree, no `pip lock`
 - reviewdog → tj-actions chain went through this
+
+<!--
+pip lock = PEP 751 lockfile generation. Seth Larson's suggestion
+over pip freeze; better analogy because the point is the missing
+lockfile, not the missing snapshot.
+-->
 
 ---
 
@@ -399,7 +405,9 @@ and the attacker owns the repo. Fix: permissions: {} at top of file.
 <!--
 91% of repos that use any third-party action.
 Trivy: 75/76 tags force-pushed. 403 PyPI packages still on it by tag.
-Fix: pin to 40-char SHA.
+Fix: pin to 40-char SHA. `zizmor --fix=all` rewrites tags to SHAs
+in place (needs GH_TOKEN to resolve refs); say this out loud,
+most people don't know there's a one-liner (Seth).
 -->
 
 ---
@@ -441,6 +449,12 @@ Fix: pass through env:, reference $VAR.
 
 <!--
 Fix: OIDC trusted publishing with an environment.
+Caveat (Seth Larson): PyPI TP doesn't support reusable workflows yet,
+so some packages have a legitimate excuse. Verified six, fsspec,
+sqlalchemy do NOT publish via reusable workflows: plain twine + token,
+fair to name. Separately, zizmor MISSES token-via-reusable-workflow
+callers entirely (mistralai case, see zizmor_issue.md), so 44,181
+is if anything an undercount.
 This is the bridge into chapter 5 and hardening.
 -->
 
@@ -520,8 +534,6 @@ Status data in data/top_action_repos_status.tsv.
 
 ## Auditing pypa/cibuildwheel
 
-zizmor's audits stop at the workflow YAML; what an action does at runtime is a separate problem.
-
 ```yaml
 # action.yml (the visible tier)
 runs:
@@ -531,11 +543,16 @@ runs:
 ```
 
 - 2,650 PyPI publish workflows depend on it
-- Self-audits with zizmor (issue #2770), one Low chmod finding
-- Fetches CPython, PyPy, GraalPy, virtualenv, Node.js, nuget, python-build-standalone from **7 upstream hosts** at runtime, no hash pin
-- The 2026 roadmap lockfile covers `uses:` and stops there; this tier stays invisible
+- Self-audits with zizmor, one Low finding
+- Fetches interpreters from **7 upstream hosts** at runtime, no hash pin
+- The roadmap lockfile covers `uses:`; this tier stays invisible
 
 <!--
+Verbal framing: zizmor stops at the workflow YAML; what an action does
+at runtime is a separate problem. cibuildwheel self-audits (issue #2770)
+and is clean, but at runtime fetches CPython, PyPy, GraalPy, virtualenv,
+Node.js, nuget, python-build-standalone from 7 hosts without hash pinning.
+Slide trimmed for overflow (Seth); detail stays here for delivery.
 scrutineer scan of cibuildwheel: chmod path traversal in extract_zip,
 precondition-subsumed (the zip already gives RCE).
 Other popular composites checked (gh-action-pypi-publish, codecov-action,
@@ -641,13 +658,15 @@ Checklist and zizmor integration
 
 1. Trusted publishing with an environment
 2. `permissions: {}` on every workflow
-3. Pin third-party actions to SHA
+3. Pin third-party actions to SHA: `zizmor --fix=all`
 4. Never `${{ }}` into `run:`, pass through `env:`
 5. Keep the publish job minimal
 6. Run zizmor in CI
 
 <!--
 Each maps to an audit and an incident.
+--fix=all rewrites @v41 → @<sha> # v41 in place. Needs GH_TOKEN.
+The unpinned-uses fix is in the unsafe set, so plain --fix won't do it.
 -->
 
 ---
