@@ -48,6 +48,22 @@ zizmor is pinned to a specific version in `scan.py` so results are comparable ac
 uv run python -m unittest test_scan -v
 ```
 
+## Restoring data on another machine
+
+The full `collect/data/` tree is ~41 GB and not in git. A travel archive (`pycon-travel.zip`, ~585 MB) contains everything except `data/zizmor_results*/` and `data/pages/` — enough to run all reports, slide_data.py, and sqlite queries without re-scanning.
+
+The archive paths are rooted at `pycon/`, so unzip from the parent directory of an existing clone to overlay the data:
+
+```
+git pull                    # make sure the clone is current first
+cd ..                       # parent of pycon/
+unzip pycon-travel.zip      # overlays collect/data/ into the clone
+cd pycon/collect
+uv sync
+```
+
+`git status` should be clean afterwards. If you need raw zizmor output or fetched pages, re-run `scan.py` / `main.py` — both are resumable.
+
 ## License
 
 MIT
