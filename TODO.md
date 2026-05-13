@@ -2,6 +2,8 @@
 
 ## Slides
 
+- [ ] **Repo visibility**: slides + post link `github.com/andrew/pycon` but it's private. Either flip public before the talk (after sanitising `collect/data/` of the 9 undisclosed issue_comment-injection repos and anything else disclosure-sensitive) or drop the link. Seth flagged this.
+- [ ] Re-render `slides.html` / `slides.pdf` and eyeball slide 31 (cibuildwheel) after the trim
 - [x] Actions adoption: 362,899 with GH repo, 150,274 with workflows (chapter 1)
 - [x] Publish from Actions: 53,747 use `pypa/gh-action-pypi-publish` (chapter 1)
 - [x] Top third-party actions table (Findings)
