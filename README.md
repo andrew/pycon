@@ -2,7 +2,7 @@
 
 Data collection and analysis for a PyCon talk on GitHub Actions security across Python packages.
 
-Uses [ecosyste.ms](https://packages.ecosyste.ms) to identify Python packages, then scans their GitHub Actions workflows with [zizmor](https://woodruffw.github.io/zizmor/) to find common security misconfigurations.
+Uses [ecosyste.ms](https://packages.ecosyste.ms) to identify Python packages, then scans their GitHub Actions workflows with [zizmor](https://zizmor.sh) to find common security misconfigurations.
 
 ## Slides
 
