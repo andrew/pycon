@@ -61,7 +61,7 @@ The elementary-data compromise on 24 April changes the shape of the talk. Instea
 
 I run ecosyste.ms, which indexes package metadata, repository data, and CI configurations across all major ecosystems. This gives me access to GitHub Actions workflows for the vast majority of PyPI packages with public repositories.
 
-For this talk, I'm pairing the ecosyste.ms dataset with zizmor (https://woodruffw.github.io/zizmor/), a static analyser for GitHub Actions security.
+For this talk, I'm pairing the ecosyste.ms dataset with zizmor (https://zizmor.sh), a static analyser for GitHub Actions security.
 
 I wrote about this topic recently: https://nesbitt.io/2025/12/06/github-actions-package-manager.html
 

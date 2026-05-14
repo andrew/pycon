@@ -10,7 +10,14 @@ class: lead
 Andrew Nesbitt
 PyCon US 2026, Long Beach
 
+<!--
+Hello.
+What zizmor finds across PyPI, what to do about it.
+-->
+
 ---
+
+<!-- _class: lead invert -->
 
 ## Andrew Nesbitt
 
@@ -21,9 +28,8 @@ PyCon US 2026, Long Beach
 - Critical Infrastructure Hobbyist
 
 <!--
-Not a security researcher by trade. I look at package ecosystems
-as datasets: who depends on what, how things get published,
-where the infrastructure is fragile.
+First time speaking at a Python Conference
+I normally write ruby and go, but today I'm going to talk about a rust program that analyses yaml config files for a CI written in C#
 -->
 
 ---
@@ -56,12 +62,10 @@ The UV one is the one Python people have probably read.
 Open data and APIs for every major package registry.
 
 <!--
-This is where the dataset for the talk comes from.
-PyPI, npm, RubyGems, crates.io, Go, Maven, etc.
-For each package: repo URL, CI config, dependents, download counts.
-Makes "scan every PyPI package's workflows" a tractable query
-rather than a crawling project.
-TODO: refresh these numbers closer to the conference.
+Where the dataset for the talk comes from.
+PyPI, npm, RubyGems, crates.io, Go, Maven.
+Per package: repo URL, CI config, dependents, download counts.
+Makes "scan every PyPI workflow" a query you can run.
 -->
 
 ---
@@ -70,11 +74,11 @@ TODO: refresh these numbers closer to the conference.
 
 # GitHub Actions
 
-The dominant CI for Python
-Trusted publishing implications
+By The Numbers
 
 <!--
-5 min.
+Chapter 1: how Actions ended up holding the publish credential
+for most of PyPI.
 -->
 
 ---
@@ -85,12 +89,12 @@ Trusted publishing implications
 - Where the code already lives
 - 386,957 PyPI packages link a GitHub repo
 - 152,318 have `.github/workflows/`
-- Travis, CircleCI, Azure Pipelines: single-digit %
+- Travis CI: 11%, others below 2%
 
 <!--
-CI-system comparison is from brief data over a ~69k sample
-(data/brief/pypi_org/, collected before --no-brief).
-Report as percentages, not counts. report_brief.py for the breakdown.
+CI-system comparison: brief data, ~69k sample.
+data/brief/pypi_org/, collected before --no-brief.
+Use percentages. report_brief.py for the breakdown.
 -->
 
 ---
@@ -103,8 +107,9 @@ Report as percentages, not counts. report_brief.py for the breakdown.
 - The runner that builds your wheel has your publish credential
 
 <!--
-Stat: % of packages that publish from Actions
-(pypa/gh-action-pypi-publish or twine in a workflow).
+The runner that builds the wheel has the publish credential.
+Anything that influences what the runner runs can publish for you.
+56,490 is the population the rest of the talk works against.
 -->
 
 ---
@@ -136,35 +141,13 @@ the attestation signs the wrong thing.
 
 ---
 
-## zizmor
-
-```
-$ uvx zizmor .github/workflows/
-```
-
-- Static analyser for Actions workflows
-- Named audits, severity + confidence
-- Runs locally or in CI
-- _woodruffw.github.io/zizmor_
-
-![](images/zizmor-output.png)
-
-<!--
-By William Woodruff, who is probably in this room (wave).
-I didn't build this, I just pointed it at everything.
-TODO: terminal screenshot so audit names aren't abstract.
--->
-
----
-
 <!-- _class: lead invert -->
 
-# The problem
+# GitHub Actions is the Weakest Link
 
-Actions as a package manager without security features
+Let me list the ways
 
 <!--
-5 min.
 nesbitt.io/2025/12/06/github-actions-package-manager.html
 -->
 
@@ -181,6 +164,12 @@ nesbitt.io/2025/12/06/github-actions-package-manager.html
 - Pulls someone else's code and executes it on your runner
 - Functionally, that's `pip install`
 - Except `@v41` is a git ref, not an immutable version
+
+<!--
+These look like dependency declarations because they are.
+@v41 is a git ref the maintainer can move.
+The tj-actions setup. Comes back in two slides.
+-->
 
 ---
 
@@ -229,9 +218,9 @@ Trivy: 75 of 76 tags force-pushed in one go.
 - reviewdog → tj-actions chain went through this
 
 <!--
-pip lock = PEP 751 lockfile generation. Seth Larson's suggestion
-over pip freeze; better analogy because the point is the missing
-lockfile, not the missing snapshot.
+pip lock = PEP 751 lockfile generation.
+Seth's suggestion over pip freeze.
+The missing piece is the lockfile.
 -->
 
 ---
@@ -249,11 +238,12 @@ lockfile, not the missing snapshot.
 
 <!--
 Three put malicious wheels on PyPI or npm.
-TanStack happened yesterday: bundle-size.yml pull_request_target
-poisoned the pnpm cache, publish workflow restored it,
-attacker code extracted id-token from runner memory and uploaded
-42 packages / 84 versions. OIDC trusted publishing didn't help
-because the attacker was already inside the workflow that had it.
+TanStack happened yesterday.
+bundle-size.yml pull_request_target poisoned the pnpm cache.
+Publish workflow restored the poisoned cache.
+Attacker code extracted id-token from runner memory.
+42 packages / 84 versions uploaded.
+OIDC didn't help: attacker was inside the workflow that had it.
 -->
 
 ---
@@ -273,9 +263,9 @@ publish workflow → restores poisoned cache
 - **1,348 PyPI repos** have the same `dangerous-triggers` + `cache-poisoning` shape
 
 <!--
-Yesterday's news as the audience walks in. The chain isn't npm-specific;
-swap pnpm cache for pip/wheel cache and PyPI for npm and it's
-identical. Argues for ALL the hardening rules, not just OIDC.
+Yesterday's news.
+Not npm-specific. Swap pnpm cache for pip/wheel cache, npm for PyPI: same chain.
+Argues for all the hardening rules in chapter 6.
 tanstack.com/blog/npm-supply-chain-compromise-postmortem
 -->
 
@@ -284,13 +274,28 @@ tanstack.com/blog/npm-supply-chain-compromise-postmortem
 
 <!-- _class: lead invert -->
 
-# Methodology
+# How bad is it?
 
-ecosyste.ms dataset and zizmor scanning
+Using zizmor at scale to find common misconfigurations
+
+---
+
+## zizmor
+
+```
+$ uvx zizmor .github/workflows/
+```
+
+- Static analyser for Actions workflows
+- Named audits, severity + confidence
+- Runs locally or in CI
+- _[zizmor.sh](https://zizmor.sh)_
+
+![](images/zizmor-output.png)
 
 <!--
-3 min.
-(zizmor itself already introduced in chapter 1)
+By William Woodruff, who is probably in this room (wave).
+I didn't build this, I just pointed it at everything.
 -->
 
 ---
@@ -304,7 +309,8 @@ ecosyste.ms dataset and zizmor scanning
 
 <!--
 A chunk of PyPI links to repos that are deleted, renamed, or private.
-You can pip install it, you can't audit it. Separate talk in that.
+You can pip install. You can't read the source.
+Separate talk in that.
 -->
 
 ---
@@ -331,7 +337,9 @@ _github.com/andrew/pycon_
 - A finding means the YAML permits the pattern, not that it's exploitable today
 
 <!--
-Sets up the precision caveats before the big numbers.
+Precision caveats before the big numbers in the next chapter.
+A finding means the YAML permits the pattern.
+Exploitability depends on repo settings zizmor can't see.
 -->
 
 ---
@@ -343,8 +351,8 @@ Sets up the precision caveats before the big numbers.
 Common misconfigurations across Python packages
 
 <!--
-8 min. One slide per audit: pattern, why it's exploitable,
-PyPI repos affected, published CVEs of that class.
+One slide per audit.
+Pattern, why it's exploitable, PyPI repos affected, published CVEs.
 -->
 
 ---
@@ -360,12 +368,12 @@ PyPI repos affected, published CVEs of that class.
 | `cache-poisoning` | 15,371 | 2 |
 | `dangerous-triggers` | 7,025 | 8 |
 
-_n = 152,318 · 49 advisories in GHSA ecosystem=actions, overlap allowed_
-
 <!--
-27/49 published advisories are injection. The 4 unpinned-uses are
-the four real tag-hijack compromises: Trivy, xygeni, reviewdog,
-tj-actions. bucket_cves.py regenerates this.
+n = 152,318. 49 advisories in GHSA ecosystem=actions. Overlap allowed.
+27/49 published advisories are injection.
+The 4 unpinned-uses are the four real tag-hijack compromises:
+Trivy, xygeni, reviewdog, tj-actions.
+bucket_cves.py regenerates this.
 -->
 
 ---
@@ -385,8 +393,9 @@ jobs:
 - **102,235** repos
 
 <!--
-This is the pivot, not the entry. Combine with any of the others
-and the attacker owns the repo. Fix: permissions: {} at top of file.
+Used as the pivot step.
+Combine with any other audit and the attacker owns the repo.
+Fix: permissions: {} at top of file.
 -->
 
 ---
@@ -404,10 +413,11 @@ and the attacker owns the repo. Fix: permissions: {} at top of file.
 
 <!--
 91% of repos that use any third-party action.
-Trivy: 75/76 tags force-pushed. 403 PyPI packages still on it by tag.
-Fix: pin to 40-char SHA. `zizmor --fix=all` rewrites tags to SHAs
-in place (needs GH_TOKEN to resolve refs); say this out loud,
-most people don't know there's a one-liner (Seth).
+Trivy: 75/76 tags force-pushed.
+403 PyPI packages still on Trivy by tag.
+Fix: pin to 40-char SHA.
+zizmor --fix=all rewrites tags to SHAs in place. Needs GH_TOKEN.
+Most people don't know there's a one-liner (Seth).
 -->
 
 ---
@@ -423,12 +433,12 @@ most people don't know there's a one-liner (Seth).
 - **21,166** repos · **27** of 49 published Actions advisories
 
 <!--
-elementary-data (Apr 2026): comment.body on issue_comment trigger,
-malicious wheel on PyPI in 10 min. We had it in the dataset.
-1,396 repos interpolate something attacker-controlled; 99 on
-issue/issue_comment triggers where secrets are always in scope.
+elementary-data (Apr 2026): comment.body on issue_comment trigger.
+Malicious wheel on PyPI in 10 min. Was in the dataset.
+1,396 repos interpolate attacker-controlled fields.
+99 on issue/issue_comment triggers. Secrets always in scope.
 Biggest in the chain-of-10: sqlglot, 11.6M/month, disclosed.
-Other 9 still going through coordinated disclosure, unnamed on stage.
+Other 9 still in coordinated disclosure. Don't name them.
 Fix: pass through env:, reference $VAR.
 -->
 
@@ -449,13 +459,13 @@ Fix: pass through env:, reference $VAR.
 
 <!--
 Fix: OIDC trusted publishing with an environment.
-Caveat (Seth Larson): PyPI TP doesn't support reusable workflows yet,
-so some packages have a legitimate excuse. Verified six, fsspec,
-sqlalchemy do NOT publish via reusable workflows: plain twine + token,
-fair to name. Separately, zizmor MISSES token-via-reusable-workflow
-callers entirely (mistralai case, see zizmor_issue.md), so 44,181
-is if anything an undercount.
-This is the bridge into chapter 5 and hardening.
+Caveat (Seth): PyPI TP doesn't support reusable workflows yet.
+Some packages have a legitimate excuse.
+six, fsspec, sqlalchemy verified: plain twine + token, fair to name.
+zizmor misses token-via-reusable-workflow callers entirely.
+mistralai case, see zizmor_issue.md.
+44,181 is an undercount.
+Bridge into chapter 5.
 -->
 
 ---
@@ -473,10 +483,10 @@ This is the bridge into chapter 5 and hardening.
 - **15,371** repos · 2 advisories
 
 <!--
-Ultralytics (Dec 2024): fork PR poisoned cache, release workflow
-restored it, crypto miner shipped to PyPI.
-TanStack (11 May 2026): pnpm store cache poisoned across PR boundary,
-publish workflow restored it, cached code extracted OIDC from runner memory.
+Ultralytics (Dec 2024): fork PR poisoned cache, release workflow restored it.
+Crypto miner shipped to PyPI.
+TanStack (11 May 2026): pnpm store cache poisoned across PR boundary.
+Publish workflow restored it. Cached code extracted OIDC from runner memory.
 Fix: don't restore caches in jobs that publish.
 -->
 
@@ -500,10 +510,10 @@ jobs:
 - **7,025** repos · 8 advisories
 
 <!--
-spotbugs (Nov 2024) stole the maintainer's PAT.
-PAT sat unused for four months, used in March 2025 to push
-the reviewdog and tj-actions tag-hijack chain.
-Ultralytics (Dec 2024) entry point.
+spotbugs (Nov 2024): stole the maintainer's PAT.
+PAT sat unused for 4 months.
+Used Mar 2025 to push the reviewdog and tj-actions tag-hijack chain.
+Ultralytics (Dec 2024): entry point.
 TanStack (11 May 2026): bundle-size.yml pull_request_target ran fork code.
 Fix: use pull_request, or never check out PR head under _target.
 -->
@@ -548,18 +558,16 @@ runs:
 - The roadmap lockfile covers `uses:`; this tier stays invisible
 
 <!--
-Verbal framing: zizmor stops at the workflow YAML; what an action does
-at runtime is a separate problem. cibuildwheel self-audits (issue #2770)
-and is clean, but at runtime fetches CPython, PyPy, GraalPy, virtualenv,
-Node.js, nuget, python-build-standalone from 7 hosts without hash pinning.
-Slide trimmed for overflow (Seth); detail stays here for delivery.
-scrutineer scan of cibuildwheel: chmod path traversal in extract_zip,
-precondition-subsumed (the zip already gives RCE).
-Other popular composites checked (gh-action-pypi-publish, codecov-action,
-pre-commit, snok/install-poetry) pin or only use actions/*.
-aio-libs/create-release is the counterexample, pulls aio-libs/get-releasenote@v1.4.5,
-pypa/gh-action-pypi-publish@v1.5.0, ncipollo/release-action@v1.
-TODO: run scrutineer on the rest of top_action_repos.txt.
+zizmor stops at the workflow YAML.
+What an action does at runtime is a separate problem.
+cibuildwheel self-audits via zizmor issue #2770. Clean.
+Runtime fetches: CPython, PyPy, GraalPy, virtualenv, Node.js, nuget,
+python-build-standalone. 7 hosts. No hash pinning.
+Other top composites pin or only use actions/* (gh-action-pypi-publish,
+codecov-action, pre-commit, snok/install-poetry).
+aio-libs/create-release is the counterexample.
+Pulls aio-libs/get-releasenote@v1.4.5, pypa/gh-action-pypi-publish@v1.5.0,
+ncipollo/release-action@v1.
 -->
 
 ---
@@ -578,22 +586,23 @@ One tag-hijack here runs with PyPI credentials across thousands of packages.
 
 <!--
 Same job as pypa/gh-action-pypi-publish. 64,324 publish jobs total.
-Worth a callout: step-security/harden-runner is in 144 publish jobs
-at 2.4% unpinned, an order of magnitude better than everything else.
-The audience that would benefit most from pinning is precisely the
-one not running the kind of tool that would tell them so.
+step-security/harden-runner: 144 publish jobs, 2.4% unpinned.
+An order of magnitude better than everything else in the table.
+The audience that would benefit most from pinning is the one
+without the tooling that would tell them.
 -->
 
 ---
 
 <!-- _class: lead invert -->
 
-# pip's security model
+# pip vs actions
 
 Lockfiles, hashes, verification
 
 <!--
-4 min.
+Three side-by-side comparisons with pip,
+then GitHub's 2026 roadmap.
 -->
 
 ---
@@ -604,6 +613,12 @@ Lockfiles, hashes, verification
 - What you resolved yesterday is what you install tomorrow
 - Actions: `@v4` today ≠ `@v4` next week
 - No equivalent
+
+<!--
+First of three pip-vs-Actions comparisons.
+pip had lockfiles in 2013. Actions still doesn't in 2026.
+On GitHub's 2026 roadmap, no ship date.
+-->
 
 ---
 
@@ -616,6 +631,12 @@ pip install --require-hashes -r requirements.txt
 - Refuses anything that doesn't match
 - Actions: SHA pin is the closest, but manual, per-reference, no transitive
 
+<!--
+SHA pin is the manual equivalent.
+Doesn't propagate to the action's own `uses:`.
+That's the transitive gap from chapter 2.
+-->
+
 ---
 
 ## Yanking and recall
@@ -623,6 +644,12 @@ pip install --require-hashes -r requirements.txt
 - PEP 592: yank a bad release, resolvers stop picking it
 - Actions: hijacked tag stays hijacked until someone force-pushes it back
 - tj-actions tags were malicious for hours
+
+<!--
+No recall mechanism.
+Maintainer force-pushes the legit SHA back over the bad one.
+Every workflow that ran in between already executed the malicious code.
+-->
 
 ---
 
@@ -632,12 +659,13 @@ pip install --require-hashes -r requirements.txt
 - Policy controls on triggers (ban `pull_request_target`)
 - Scoped secrets
 - Egress firewall for runners
+- _No committed ship dates yet_
 
-_Direction, not yet delivery. No committed ship dates as of writing._
+[github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/](https://github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/)
 
 <!--
+Announced 26 March 2026.
 The lockfile feature is pip circa 2013.
-github.blog/.../github-actions-2026-security-roadmap/
 -->
 
 ---
@@ -649,7 +677,7 @@ github.blog/.../github-actions-2026-security-roadmap/
 Checklist and zizmor integration
 
 <!--
-5 min.
+Six rules, then how to wire zizmor into CI.
 -->
 
 ---
@@ -689,12 +717,11 @@ jobs:
 - Bind the publisher on PyPI to the environment name
 
 <!--
-intercom-client showed id-token:write without environment is bypassable.
-TanStack (11 May 2026) showed that even WITH the environment, an attacker
-who gets code into the publish workflow (via cache poisoning here) can
-mint the OIDC token from runner memory. The environment closes the
-dispatch pivot, not runtime extraction. Rule 5 (minimal publish job)
-is what closes that.
+intercom-client: id-token:write without environment is bypassable.
+TanStack (11 May 2026): even with the environment, code that lands
+in the publish workflow can mint OIDC from runner memory.
+Environment closes the dispatch pivot.
+Runtime extraction needs rule 5: minimal publish job.
 -->
 
 ---
@@ -718,7 +745,9 @@ jobs:
 Findings show up in the PR and the Security tab.
 
 <!--
-TODO: screenshot of a failing check on a PR.
+zizmorcore/zizmor-action is the official wrapper.
+SARIF upload to the Security tab needs security-events: write.
+Runs on every PR. Fails the check by default.
 -->
 
 ---
@@ -742,14 +771,15 @@ Point at one of their workflow files on screen.
 | artipacked | 2,755 | 2,337 | 2,376 |
 | excessive-permissions | 2,186 | 1,887 | 1,900 |
 
-PyPI critical set: ~15% drop in three weeks after Trivy and elementary-data, then flat.
+PyPI critical set: ~15% drop in three weeks after Trivy and elementary-data security events.
 
 <!--
 Deduped by repo. apispec, awscli, babel went to zero entirely.
-TODO: refresh with weekend full-scan numbers.
 -->
 
 ---
+
+<!-- _class: lead invert -->
 
 # Thanks
 
@@ -757,4 +787,10 @@ Andrew Nesbitt
 _nesbitt.io · @andrewnez · ecosyste.ms_
 
 Data + scan tooling: _github.com/andrew/pycon_
-zizmor: _woodruffw.github.io/zizmor_
+zizmor: _[zizmor.sh](https://zizmor.sh)_
+
+<!--
+Thanks.
+Code, data, scan scripts at github.com/andrew/pycon.
+Questions.
+-->

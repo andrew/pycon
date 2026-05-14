@@ -20,15 +20,6 @@
 ## Data
 
 - [x] `bucket_cves.py`: fetches GHSA ecosystem=actions, regex-buckets by audit, writes `data/cve_buckets.json`. 10 unbucketed (mostly Harden-Runner egress, runner privesc) worth a manual pass
-- [ ] Run scrutineer + zizmor on the rest of `top_action_repos.txt` (cibuildwheel done: 1 Low, self-audits with zizmor #2770; runtime fetches from 7 upstream hosts unpinned)
-- [ ] Extend `resolve_actions.py` over the long tail (top-200) to find more unpinned third-party transitives than just aio-libs
-- [ ] Full `pypi.org` re-scan (running, `--workers 3`)
-- [ ] One more critical-set re-scan closer to the conference, zizmor pinned
-- [ ] Check for zizmor 1.24.2 with the #1904 panic fix before the next full scan
-- [ ] Self-hosted runners on `pull_request`: extract `runs-on:` from raw workflow YAML
-- [ ] Expand npm indexing beyond critical so `report_token_risk.py` can validate the OIDC tier
-- [ ] Separate the 1.23.1→1.24.1 delta from repo drift: extend workflows_export to all critical repos and replay both versions
-
 ## Disclosures
 
 - [ ] sqlglot (11.6M/month, write-scoped issue_comment injection)
@@ -47,14 +38,3 @@
 
 The May full scan runs `--no-brief`. Brief data exists for ~69k repos in `data/brief/pypi_org/` from earlier runs; `report_brief.py` reads from there. Report brief-derived stats as percentages, not counts, since it's a ~46% sample. If a full-coverage brief pass is needed later, run `scan.py pypi.org --force` without `--no-brief` once disk allows.
 
-## Refresh after the full re-scan completes
-
-Re-run `uv run slide_data.py` from `collect/` and update:
-
-- [ ] Chapter 1: 362,899 / 150,274 / 53,747
-- [ ] Six-audits overview table and the six per-audit repo counts
-- [ ] Most-popular third-party actions table
-- [x] Publish-job concentration table (`slice_publish_jobs.py` regenerates the TSV from the latest db)
-- [ ] `use-trusted-publishing` package list (six, fsspec, sqlalchemy, ...)
-- [ ] "Maintainers are responding" table (add the new data point)
-- [ ] 404 rate
