@@ -17,6 +17,14 @@ What zizmor finds across PyPI, what to do about it.
 
 ---
 
+![](images/dogs.gif)
+
+<!--
+Quick aside before we get going.
+-->
+
+---
+
 <!-- _class: lead invert -->
 
 ## Andrew Nesbitt
