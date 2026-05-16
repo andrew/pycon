@@ -554,11 +554,10 @@ Fix: use pull_request, or never check out PR head under _target.
 ```
 
 - Uses an action that has been archived on GitHub, i.e. deprecated
-- No future updates
-- No security patches
+- No future updates, no security patches
 - Might break if the action's runtime changes (e.g. deprecates Node 16)
 - Might break if GitHub changes the API the action relies on
-* **3,625** PyPI repos depend on an archived `archived-uses`
+- **3,625** PyPI repos depend on an archived `archived-uses`
 
 ---
 
@@ -582,6 +581,8 @@ Status data in data/top_action_repos_status.tsv.
 ---
 
 ## What goes on inside an action?
+
+`pypa/cibuildwheel`
 
 ```yaml
 # action.yml (the visible tier)
@@ -634,7 +635,7 @@ without the tooling that would tell them.
 
 <!-- _class: lead invert -->
 
-# GitHub's 2026 roadmap
+# GitHub's Actions 2026 Security Roadmap
 
 Lockfiles, hashes, verification
 
@@ -645,12 +646,18 @@ Acknowledge it directly.
 
 ---
 
-## GitHub's 2026 roadmap
+![](images/roadmap.png)
 
+---
+
+## GitHub's Actions 2026 Security Roadmap
+
+- Published March 2026
 - Workflow dependency locking, transitive SHAs
 - Policy controls on triggers (ban `pull_request_target`)
 - Scoped secrets
 - Egress firewall for runners
+- 3-9 month timelines
 - _No committed ship dates yet_
 
 [github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/](https://github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/)
