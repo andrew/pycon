@@ -796,9 +796,9 @@ Deduped by repo. apispec, awscli, babel went to zero entirely.
 
 - :foot: GitHub Actions is full of footguns
 - :rainbow: Review your workflows with zizmor
-- :spy: Be cautious of 3rd party actions
+- :detective: Be cautious of 3rd party actions
 - :lock: Set up Trusted Publishing
-- Kill `pull_request_target` with :fire:
+- :fire: Kill `pull_request_target` with :fire:
 
 <!--
 Five things to do Monday.
