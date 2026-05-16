@@ -38,6 +38,18 @@ uv run report_actions.py            # actions report -> data/report_actions_pypi
 
 All scripts default to `pypi.org` and accept an optional registry argument and `--critical` flag.
 
+Additional scripts, run ad-hoc against the same databases:
+
+- `slide_data.py` — every number that appears on a slide, regenerable after a scan
+- `bucket_cves.py` — fetches GHSA advisories (ecosystem=actions) and buckets them by zizmor audit
+- `report_brief.py` — toolchain/`brief` analysis report
+- `report_token_risk.py` — packages ranked by PyPI token-hygiene risk
+- `slice_publish_jobs.py` — third-party actions running in jobs that also run `pypa/gh-action-pypi-publish`
+- `resolve_actions.py` — resolves transitive `uses:` dependencies inside composite actions
+- `typosquat.py` — typosquat variants of popular actions that exist in the actions inventory
+- `export_workflows.py` — exports workflow files from the worst repos for review
+- `compare.py` — cross-registry comparison of zizmor findings
+
 `scan.py` writes per-package results to `data/zizmor_results/<registry>/<pkg>.json` with a `<pkg>.sha` sidecar recording the commit scanned. Pass `--workers N` to clone and scan N repos concurrently. Pass `--no-brief` to skip the toolchain analysis and clone `--sparse` so only `.github/` is ever materialised; use this for full-registry scans. Clones over 500 MB are skipped and recorded in `failed.json`. By default it skips any package that already has results, so an interrupted run can be resumed by re-running the same command. Pass `--force` to refresh: each repo's HEAD is checked with `git ls-remote` and only repos with new commits since the recorded SHA are re-cloned and re-scanned. Clones retry up to three times on transient errors (timeouts, early EOF, 5xx, rate limits) with a 300s per-attempt timeout.
 
 For a clean point-in-time snapshot, move `data/zizmor_results/<registry>/` aside before running.
@@ -50,7 +62,7 @@ uv run python -m unittest test_scan -v
 
 ## Restoring data on another machine
 
-The full `collect/data/` tree is ~41 GB and not in git. A travel archive (`pycon-travel.zip`, ~585 MB) contains everything except `data/zizmor_results*/` and `data/pages/` — enough to run all reports, slide_data.py, and sqlite queries without re-scanning.
+The full `collect/data/` tree is ~41 GB and not in git. A travel archive (`pycon-travel.zip`, ~610 MB) contains everything except `data/zizmor_results*/` and `data/pages/` — enough to run all reports, `slide_data.py`, and sqlite queries without re-scanning.
 
 The archive paths are rooted at `pycon/`, so unzip from the parent directory of an existing clone to overlay the data:
 
