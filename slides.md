@@ -384,11 +384,13 @@ Pattern, why it's exploitable, PyPI repos affected, published CVEs.
 | audit | PyPI repos | GHSA advisories |
 |---|---:|---:|
 | `excessive-permissions` | 102,235 | 6 |
-| `unpinned-uses` | 85,774 | 4 |
+| `unpinned-uses`* | 85,774 | 4 |
 | `use-trusted-publishing` | 44,181 | n/a |
 | `template-injection` | 21,166 | **27** |
 | `cache-poisoning` | 15,371 | 2 |
 | `dangerous-triggers` | 7,025 | 8 |
+
+\* <small> _`unpinned-uses` only for third-party actions_ </small>
 
 <!--
 n = 152,318. 49 advisories in GHSA ecosystem=actions. Overlap allowed.
@@ -410,9 +412,9 @@ jobs:
 ```
 
 - Without `permissions:`, the job inherits the repo default
-- For repos created before Feb 2023 that's `contents: write`, `actions: write`, …
+- For repos created before Feb 2023: `contents: write`, `actions: write`, …
 - Any compromised step can push commits and dispatch workflows
-- **102,235** repos
+- **102,235** pypi repos have at least one workflow without `permissions: {}`
 
 <!--
 Used as the pivot step.
@@ -431,7 +433,7 @@ Fix: permissions: {} at top of file.
 - `@v41` is a git tag; the owner (or attacker) can move it
 - Next run executes whatever the tag now points at
 - **85,774** repos use a third-party action by tag
-- 4 published compromises: tj-actions, reviewdog, Trivy, xygeni
+- **4** published compromises via this: tj-actions, reviewdog, Trivy, xygeni
 
 <!--
 91% of repos that use any third-party action.
@@ -452,7 +454,8 @@ Most people don't know there's a one-liner (Seth).
 
 - `${{ }}` expands before bash sees the script
 - Attacker-controlled fields (PR title, branch name, issue body) become shell
-- **21,166** repos · **27** of 49 published Actions advisories
+- **21,166** PyPI repositories interpolate attacker-controlled fields into `run:`
+- **27** of 49 published Actions CVEs are template-injection
 
 <!--
 elementary-data (Apr 2026): comment.body on issue_comment trigger.
@@ -474,7 +477,7 @@ Fix: pass through env:, reference $VAR.
     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
 ```
 
-- Long-lived token stored as a repo secret
+- Long-lived token stored in GitHub secrets
 - The most valuable target for other vectors
 - **44,181** repos still on tokens (~78% of `gh-action-pypi-publish` users)
 - Including `six` (896M/mo), `fsspec` (616M), `sqlalchemy` (335M)
@@ -502,7 +505,8 @@ Bridge into chapter 5.
 
 - Cache is shared across workflows in a repo
 - A low-privilege job writes a poisoned entry; the release job restores it
-- **15,371** repos · 2 advisories
+- **15,371** PyPI repositories use a cache action in a way that could get poisoned
+- **2** public CVE advisories
 
 <!--
 Ultralytics (Dec 2024): fork PR poisoned cache, release workflow restored it.
@@ -529,7 +533,8 @@ jobs:
 
 - `pull_request_target` runs in the base repo with secrets
 - Checking out the PR head runs the fork's code with those secrets
-- **7,025** repos · 8 advisories
+- **7,025** PyPI repositories use `pull_request_target`
+- **8** public CVE advisories
 
 <!--
 spotbugs (Nov 2024): stole the maintainer's PAT.
@@ -542,6 +547,21 @@ Fix: use pull_request, or never check out PR head under _target.
 
 ---
 
+## `archived-uses`
+
+```yaml
+- uses: actions/create-release@v1
+```
+
+- Uses an action that has been archived on GitHub, i.e. deprecated
+- No future updates
+- No security patches
+- Might break if the action's runtime changes (e.g. deprecates Node 16)
+- Might break if GitHub changes the API the action relies on
+* **3,625** PyPI repos depend on an archived `archived-uses`
+
+---
+
 ## Most popular third-party actions
 
 | action | PyPI repos | unpinned |
@@ -551,9 +571,6 @@ Fix: use pull_request, or never check out PR head under _target.
 | `astral-sh/setup-uv` | 17,047 | 85.6% |
 | `softprops/action-gh-release` | 9,327 | 91.3% |
 | `pypa/cibuildwheel` | 2,650 | 91.7% |
-| `actions/create-release` _(archived 2021)_ | 1,956 | 98.7% |
-
-`archived-uses`: **3,625** repos depend on an archived action.
 
 <!--
 These are the dependencies of the Python ecosystem's CI.
@@ -821,4 +838,3 @@ If the talk just saved your team an incident, fund the tool.
 <!--
 Closing dog. Mirrors slide 3.
 -->
-
