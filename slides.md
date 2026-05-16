@@ -84,7 +84,7 @@ ecosyste.ms is my open dataset and API for package metadata.
 Let's talk about CI
 
 <!--
-
+Bridge. Establish GHA as the dominant Python CI before showing what's wrong with it.
 -->
 
 ---
@@ -111,9 +111,9 @@ Side note: Travis CI stopped providing free builds for open source in 2023, so i
 - The runner that builds your wheel has your publish credential
 
 <!--
-The runner that builds the wheel has the publish credential.
-Anything that influences what the runner runs can publish for you.
-56,490 is the population the rest of the talk works against.
+Runner holds the publish credential.
+Anything that influences the runner can publish.
+56,490 = population the rest of the talk works against.
 -->
 
 ---
@@ -141,8 +141,8 @@ The workflow's identity IS the credential.
 - Everything upstream of the upload step is in scope
 
 <!--
-If an attacker controls any step before signing,
-the attestation signs the wrong thing.
+Attestation = signature on the artifact, not on the workflow.
+Any compromised step before signing → attestation signs malicious wheel.
 -->
 
 ---
@@ -246,10 +246,11 @@ The missing piece is the lockfile.
 | Mini Shai-Hulud | May 2026 | cache poison + OIDC theft → **PyPI** (mistralai, guardrails-ai) |
 
 <!--
-Six put malicious wheels on PyPI in the last eight weeks.
-TeamPCP runs the Trivy → LiteLLM → Telnyx chain: poison a CI tool, harvest its PyPI tokens, upload directly.
-Lightning is the counter-example: workflow wasn't the vector, a long-lived token was. Trusted publishing would have stopped it. GHA hardening wouldn't.
-Mini Shai-Hulud is next slide.
+Six malicious wheels on PyPI in the last eight weeks.
+TeamPCP chain: Trivy → LiteLLM → Telnyx. Poison CI tool, harvest its PyPI tokens, upload.
+Lightning: counter-example. Long-lived token, no OIDC. Trusted publishing would have stopped it, GHA hardening wouldn't.
+Mini Shai-Hulud: same chain as TanStack on npm, mistralai + guardrails-ai dropper on PyPI side.
+Ultralytics next as the PyPI worked example.
 -->
 
 ---
@@ -271,10 +272,10 @@ phase 2 → stolen PYPI_TOKEN, direct upload of 8.3.45, 8.3.46
 - **1,348 PyPI repos** have the same `dangerous-triggers` + `cache-poisoning`
 
 <!--
-The PyPI version of the chain. Ultralytics ships YOLO, tens of millions of downloads a month at the time.
-Phase 1: attacker forks, opens a PR with a crafted branch name. The PR workflow on pull_request_target runs the fork's code with write access to the cache, the branch name interpolates into a shell command, malicious code lands in the build cache. Next legitimate publish run restores the cache, builds the wheel with XMRig baked in, uploads via the workflow's PyPI token.
-Phase 2: attacker already had the PyPI token from phase 1's runner. Used it directly to push two more versions hours later. Two paths from one breach.
-Adnan Khan reported the template-injection bug in August. Regression reintroduced ten days after the patch advisory.
+Ultralytics ships YOLO. ~60M downloads/month at the time.
+Phase 1: fork PR, crafted branch name, pull_request_target runs fork code with cache write, branch name interpolates into shell, build cache poisoned. Publish run restores it, miner in wheel, token uploads it.
+Phase 2: token already stolen from phase 1 runner. Direct upload, two more versions.
+Bug reported by Adnan Khan in August 2024. Regression 10 days post-patch.
 blog.pypi.org/posts/2024-12-11-ultralytics-attack-analysis
 -->
 
@@ -620,6 +621,11 @@ without the tooling that would tell them.
 
 Lockfiles, hashes, verification
 
+<!--
+GitHub's own response to all this.
+Acknowledge it directly.
+-->
+
 ---
 
 ## GitHub's 2026 roadmap
@@ -632,6 +638,12 @@ Lockfiles, hashes, verification
 
 [github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/](https://github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/)
 
+<!--
+Roadmap = aspirations, not commitments.
+Lockfile = the big one. Maps to "missing PM features" slide.
+None of this helps you today.
+-->
+
 ---
 
 ## What's missing?
@@ -640,6 +652,12 @@ Lockfiles, hashes, verification
 - Yanking and recalling
 - CVE alerts
 - Enforcement of policies
+
+<!--
+Things a real package manager has.
+Even after roadmap ships, these gaps remain.
+PyPI has yank, recall, malware checks. Actions has none.
+-->
 
 ---
 
@@ -758,6 +776,11 @@ Deduped by repo. apispec, awscli, babel went to zero entirely.
 - :lock: Set up Trusted Publishing
 - Kill `pull_request_target` with :fire:
 
+<!--
+Five things to do Monday.
+Each maps back to an audit + incident from the talk.
+-->
+
 ---
 
 <!-- _class: lead invert -->
@@ -786,6 +809,16 @@ If you find zizmor useful, please consider supporting it:
 - [Thanks.dev](https://thanks.dev/u/gh/woodruffw)
 - [ko-fi](https://ko-fi.com/woodruffw)
 
+<!--
+zizmor is one maintainer.
+If the talk just saved your team an incident, fund the tool.
+-->
+
 ---
 
 ![](images/dogs.gif)
+
+<!--
+Closing dog. Mirrors slide 3.
+-->
+
